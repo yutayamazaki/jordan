@@ -1,10 +1,10 @@
 import { z } from "zod";
+import { EmailPatternSchema } from "./entities/emailPattern";
 
 // DB に保存するための Company テーブル用スキーマ
 export const CompanySchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  url: z.string(),
   domain: z.string(),
 });
 
@@ -36,7 +36,7 @@ export type EmailCandidateRecord = z.infer<typeof EmailCandidateSchema>;
 export const EmailPatternRecordSchema = z.object({
   id: z.uuid(),
   companyId: z.uuid(),
-  pattern: z.string(),
+  pattern: EmailPatternSchema.shape.pattern,
   reason: z.string(),
 });
 
