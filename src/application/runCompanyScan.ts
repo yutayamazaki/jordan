@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import {
   CompanySchema,
   CompanyRecord,
@@ -10,44 +9,13 @@ import {
   EmailPatternRecord,
 } from "../domain";
 import { EmailPattern } from "../domain/entities/emailPattern";
-import { detectEmailPattern } from "./detectEmailPattern";
-import { searchContacts } from "./searchContacts";
-import { saveAsCsvFiles } from "../infrastructure/saveAsCsvFiles";
 import { CliOptions } from "../cli/parseCliArgs";
 import { z } from "zod";
+import { ContactResponse } from "../domain/entities/contact";
+import { ContactFinder, EmailPatternDetector, IdGenerator, LeadExporter } from "./ports";
+import { generateEmailAddresses } from "./emailFinderService";
 
 const DEFAULT_EMAIL_PATTERN: EmailPattern["pattern"] = "f-last";
-
-// アルファベットとドメインからメールアドレスのパターンをリストで返す関数
-function generateEmailCandidates(
-  firstName: string,
-  lastName: string,
-  domain: string,
-  primaryPattern?: EmailPattern["pattern"],
-): string[] {
-  const firstInitial = firstName[0];
-  const candidatesWithPattern: { pattern: EmailPattern["pattern"]; email: string }[] = [
-    { pattern: "first.last", email: `${firstName}.${lastName}@${domain}` },
-    { pattern: "last.first", email: `${lastName}.${firstName}@${domain}` },
-    { pattern: "first-last", email: `${firstName}-${lastName}@${domain}` },
-    { pattern: "last-first", email: `${lastName}-${firstName}@${domain}` },
-    { pattern: "first_last", email: `${firstName}_${lastName}@${domain}` },
-    { pattern: "last_first", email: `${lastName}_${firstName}@${domain}` },
-    { pattern: "firstlast", email: `${firstName}${lastName}@${domain}` },
-    { pattern: "lastfirst", email: `${lastName}${firstName}@${domain}` },
-    { pattern: "f.last", email: `${firstInitial}.${lastName}@${domain}` },
-    { pattern: "f-last", email: `${firstInitial}-${lastName}@${domain}` },
-    { pattern: "f_last", email: `${firstInitial}_${lastName}@${domain}` },
-    { pattern: "flast", email: `${firstInitial}${lastName}@${domain}` },
-  ];
-
-  const patternToUse: EmailPattern["pattern"] = primaryPattern ?? "f-last";
-  const selected =
-    candidatesWithPattern.find((c) => c.pattern === patternToUse) ??
-    candidatesWithPattern[0];
-
-  return [selected.email];
-}
 
 const ContactAndEmailCandidatesSchema = z.object({
   contact: z.object({
@@ -57,38 +25,64 @@ const ContactAndEmailCandidatesSchema = z.object({
     firstName: z.string(),
     lastName: z.string(),
   }),
-  emailCandidates: z.array(z.string()),
+  primaryEmail: z.object({
+    value: z.string(),
+    confidence: z.number(),
+  }),
+  alternativeEmails: z.array(
+    z.object({
+      value: z.string(),
+      confidence: z.number(),
+    }),
+  ),
 });
 
 type ContactAndEmailCandidates = z.infer<typeof ContactAndEmailCandidatesSchema>;
 
 function createContactAndEmailCandidates(
-  contacts: ContactAndEmailCandidates["contact"][],
+  contacts: ContactResponse[],
   domain: string,
   primaryPattern?: EmailPattern["pattern"],
 ): ContactAndEmailCandidates[] {
   return contacts.map((contact) => {
-    const emailCandidates = generateEmailCandidates(
-      contact.firstName,
-      contact.lastName,
+    const emailCandidate = generateEmailAddresses({
+      firstName: contact.firstName,
+      lastName: contact.lastName,
       domain,
       primaryPattern,
-    );
+    });
     return {
       contact,
-      emailCandidates,
+      primaryEmail: {
+        value: emailCandidate.primary.value,
+        confidence: emailCandidate.primary.confidence,
+      },
+      alternativeEmails: emailCandidate.alternatives.map((alt) => ({
+        value: alt.value,
+        confidence: alt.confidence,
+      })),
     };
   });
 }
 
-export async function runCompanyScan(options: CliOptions): Promise<void> {
+export type RunCompanyScanDependencies = {
+  emailPatternDetector: EmailPatternDetector;
+  contactFinder: ContactFinder;
+  leadExporter: LeadExporter;
+  idGenerator: IdGenerator;
+};
+
+export async function runCompanyScan(
+  options: CliOptions,
+  deps: RunCompanyScanDependencies,
+): Promise<void> {
   const { company, department, debug } = options;
 
   let detectedEmailPattern: EmailPattern | null = null;
   let emailPattern: EmailPattern["pattern"] = DEFAULT_EMAIL_PATTERN;
   if (!debug) {
-    console.log("👺 Detect email pattern by web search ...");
-    detectedEmailPattern = await detectEmailPattern(company.domain);
+    console.log("\n👺 Detect email pattern by web search ...");
+    detectedEmailPattern = await deps.emailPatternDetector.detect(company.domain);
 
     if (detectedEmailPattern?.found) {
       emailPattern = detectedEmailPattern.pattern;
@@ -109,18 +103,23 @@ export async function runCompanyScan(options: CliOptions): Promise<void> {
     emailPattern = DEFAULT_EMAIL_PATTERN;
   }
 
-  const contacts = await searchContacts(debug, company.name, company.domain, department);
+  const contacts = await deps.contactFinder.searchContacts(
+    debug,
+    company.name,
+    company.domain,
+    department,
+  );
   console.log("Contacts:", JSON.stringify(contacts, null, 2));
 
-  console.log("👺 Convert names to alphabet ...");
+  console.log("\n👺 Convert names to alphabet ...");
 
   // メールアドレス候補生成
   const candidates = createContactAndEmailCandidates(contacts, company.domain, emailPattern);
   console.log("Contact and Email Candidates:", JSON.stringify(candidates, null, 2));
 
   // DB に保存するためのテーブル単位のデータに変換
-  console.log("👺 Convert to DB table records ...");
-  const companyId = randomUUID();
+  console.log("\n👺 Convert to DB table records ...");
+  const companyId = deps.idGenerator.generate();
 
   const companyRecords: CompanyRecord[] = [
     CompanySchema.parse({
@@ -134,7 +133,7 @@ export async function runCompanyScan(options: CliOptions): Promise<void> {
     !debug && detectedEmailPattern
       ? [
           EmailPatternRecordSchema.parse({
-            id: randomUUID(),
+            id: deps.idGenerator.generate(),
             companyId,
             pattern: emailPattern,
             reason: detectedEmailPattern.reason,
@@ -144,7 +143,7 @@ export async function runCompanyScan(options: CliOptions): Promise<void> {
 
   const contactRecords: ContactRecord[] = contacts.map((contact) =>
     ContactSchema.parse({
-      id: randomUUID(),
+      id: deps.idGenerator.generate(),
       companyId,
       name: contact.name,
       position: contact.position,
@@ -159,12 +158,31 @@ export async function runCompanyScan(options: CliOptions): Promise<void> {
     contactRecords.forEach((contactRecord, index) => {
       const candidate = candidates[index];
       if (!candidate) return;
-      candidate.emailCandidates.forEach((email) => {
+
+      // primary
+      records.push(
+        EmailCandidateSchema.parse({
+          id: deps.idGenerator.generate(),
+          contactId: contactRecord.id,
+          email: candidate.primaryEmail.value,
+          isPrimary: true,
+          confidence: candidate.primaryEmail.confidence,
+          type: "personal",
+          pattern: emailPattern,
+        }),
+      );
+
+      // alternatives
+      candidate.alternativeEmails.forEach((alt) => {
         records.push(
           EmailCandidateSchema.parse({
-            id: randomUUID(),
+            id: deps.idGenerator.generate(),
             contactId: contactRecord.id,
-            email,
+            email: alt.value,
+            isPrimary: false,
+            confidence: alt.confidence,
+            type: "personal",
+            pattern: emailPattern,
           }),
         );
       });
@@ -172,7 +190,7 @@ export async function runCompanyScan(options: CliOptions): Promise<void> {
     return records;
   })();
 
-  await saveAsCsvFiles(
+  await deps.leadExporter.export(
     company.domain,
     companyRecords,
     contactRecords,

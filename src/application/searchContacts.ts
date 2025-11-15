@@ -6,6 +6,7 @@ const createContactSearchPrompt = (name: string, domain: string, department: str
 あなたはB2B企業の担当者情報を調査するリサーチエージェントです。
 以下の会社情報に基づいてWEB検索ツールを用い、サービスの導入事例や採用ページなど、
 氏名・役職・部署が明示されている担当者情報を収集してください。
+その際、各担当者情報がどのページから得られたか（URLとページタイトル）も一緒に特定し、構造化して出力してください。
 
 ## 会社情報
 - 会社名: ${name}
@@ -61,6 +62,10 @@ const createContactSearchPrompt = (name: string, domain: string, department: str
 3. 部署
 4. 名（firstName, すべて小文字のアルファベット）
 5. 姓（lastName, すべて小文字のアルファベット）
+6. 情報ソース（sources）
+   - その担当者情報が記載されていたページの URL（url）
+   - そのページのタイトル（pageTitle）
+   - 複数のページから確認できた場合は、sources配列に複数要素を含めてください
 
 【出力形式】
 
@@ -70,6 +75,7 @@ ${ContactListResponseSchema.toString()}
 制約:
 - 回答には引用・参照・citationなどの情報を付与しないでください。
 - JSON以外のテキスト（説明文や前置き、後書き）は出力しないでください。
+- sources には、実際に担当者情報が確認できたページのみを含めてください。
 `;
 };
 
@@ -79,7 +85,7 @@ export async function searchContacts(
   domain: string,
   department: string,
 ): Promise<ContactResponse[]> {
-  console.log("👺 Search Web to get contact info ...");
+  console.log("\n👺 Search Web to get contact info ...");
   if (debug) {
     return [
       {
@@ -88,6 +94,7 @@ export async function searchContacts(
         department: "経営本部",
         firstName: "shoma",
         lastName: "matsuo",
+        sources: [],
       },
       {
         name: "山崎 祐太",
@@ -95,6 +102,7 @@ export async function searchContacts(
         department: "経営本部",
         firstName: "yuta",
         lastName: "yamazaki",
+        sources: [],
       },
     ];
   }

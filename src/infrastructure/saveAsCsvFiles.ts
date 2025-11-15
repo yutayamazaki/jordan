@@ -15,7 +15,7 @@ export async function saveAsCsvFiles(
   emailCandidateRecords: EmailCandidateRecord[],
   emailPatternRecords: EmailPatternRecord[],
 ): Promise<void> {
-  console.log("👺 Save results to CSV files ...");
+  console.log("\n👺 Save results to CSV files ...");
 
   const domainDirName = domain.replace(/\./g, "_");
   const baseDir = `outputs/${domainDirName}`;
@@ -51,6 +51,10 @@ export async function saveAsCsvFiles(
       { id: "id", title: "ID" },
       { id: "contactId", title: "Contact ID" },
       { id: "email", title: "Email" },
+      { id: "isPrimary", title: "Is Primary" },
+      { id: "confidence", title: "Confidence" },
+      { id: "type", title: "Type" },
+      { id: "pattern", title: "Pattern" },
     ],
   });
 

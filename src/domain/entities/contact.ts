@@ -1,4 +1,5 @@
-import { z } from 'zod';
+import { z } from "zod";
+import { EmailSourceSchema } from "./emailAddress";
 
 // Web検索で取得する担当者情報のスキーマ定義
 export const ContactResponseSchema = z.object({
@@ -6,7 +7,9 @@ export const ContactResponseSchema = z.object({
   position: z.string(), // 役職
   department: z.string(), // 部署
   firstName: z.string(), // アルファベットの名
-  lastName: z.string(),  // アルファベットの姓
+  lastName: z.string(), // アルファベットの姓
+  // この担当者情報を取得したページ情報（URL とページタイトル）
+  sources: z.array(EmailSourceSchema).default([]),
 });
 
 export type ContactResponse = z.infer<typeof ContactResponseSchema>;
