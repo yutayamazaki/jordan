@@ -1,7 +1,28 @@
 import { createStructuredOutputs } from "../adapters/openai";
 import { ContactListResponseSchema, ContactResponse } from "../domain/entities/contact";
+import { getDepartmentCategorySearchInfo } from "./departmentClassifier";
 
 const createContactSearchPrompt = (name: string, domain: string, department: string) => {
+  const trimmedDepartment = department.trim();
+  const categoryInfo = trimmedDepartment
+    ? getDepartmentCategorySearchInfo(trimmedDepartment)
+    : { category: "OTHER" as const, relatedKeywords: [] };
+
+  const departmentDescription = trimmedDepartment || "特に指定なし";
+  const categoryDescription =
+    trimmedDepartment && categoryInfo.relatedKeywords.length > 0
+      ? `
+部署指定について:
+- ユーザー指定部署名: ${trimmedDepartment}
+- 部署カテゴリ: ${categoryInfo.category}
+- 類似部署キーワードの例: ${categoryInfo.relatedKeywords.join(" / ")}
+
+上記の部署カテゴリに属すると考えられる部署（例: ${categoryInfo.relatedKeywords.join(
+        "、",
+      )} など）の担当者も、同じカテゴリの候補として積極的に抽出してください。
+`
+      : "";
+
   return `
 あなたはB2B企業の担当者情報を調査するリサーチエージェントです。
 以下の会社情報に基づいてWEB検索ツールを用い、サービスの導入事例や採用ページなど、
@@ -11,7 +32,8 @@ const createContactSearchPrompt = (name: string, domain: string, department: str
 ## 会社情報
 - 会社名: ${name}
 - 会社ドメイン: ${domain}
-- 部署: ${department || "特に指定なし"}
+- 部署: ${departmentDescription}
+${categoryDescription}
 
 ## 調査方針
 
@@ -40,7 +62,8 @@ const createContactSearchPrompt = (name: string, domain: string, department: str
    - 顧客企業側の担当者が事例インタビュー等に記載されている場合も候補に含めてよい
 
 3. 部署指定がある場合（上記の「部署」情報が空でない場合）は、
-   その部署と関連がありそうな人物（同じ部門名や、近い業務領域の役職）を優先的に抽出してください。
+   その部署と関連がありそうな人物（同じ部門名や、近い業務領域の役職）や、
+   上記の「部署カテゴリ」に含まれると考えられる部署名を持つ人物を優先的に抽出してください。
 
 4. 以下のような人物は除外してください。
    - 就活生や応募者、インターン応募者など、従業員・役員ではない人物

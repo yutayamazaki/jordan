@@ -7,6 +7,13 @@ import {
 } from "../domain";
 import { ContactResponse } from "../domain/entities/contact";
 
+export type EmailVerificationResult = {
+  email: string;
+  isDeliverable: boolean;
+  hasMxRecords: boolean;
+  reason?: string;
+};
+
 export interface EmailPatternDetector {
   detect(domain: string): Promise<EmailPattern | null>;
 }
@@ -18,6 +25,18 @@ export interface ContactFinder {
     domain: string,
     department: string,
   ): Promise<ContactResponse[]>;
+}
+
+export interface EmailVerifier {
+  verify(email: string): Promise<EmailVerificationResult>;
+}
+
+export interface EmailVerificationRepository {
+  findRecent(
+    email: string,
+    maxAgeDays: number,
+  ): Promise<EmailVerificationResult | null>;
+  save(result: EmailVerificationResult): Promise<void>;
 }
 
 export interface LeadExporter {
@@ -33,4 +52,3 @@ export interface LeadExporter {
 export interface IdGenerator {
   generate(): string;
 }
-

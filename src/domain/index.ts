@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { EmailPatternSchema } from "./entities/emailPattern";
 import { EmailTypeSchema } from "./entities/emailAddress";
+import { DepartmentCategorySchema } from "./entities/department";
 
 // DB に保存するための Company テーブル用スキーマ
 export const CompanySchema = z.object({
@@ -18,6 +19,7 @@ export const ContactSchema = z.object({
   name: z.string(),
   position: z.string(),
   department: z.string(),
+   departmentCategory: DepartmentCategorySchema,
   firstName: z.string(),
   lastName: z.string(),
 });
@@ -33,6 +35,9 @@ export const EmailCandidateSchema = z.object({
   confidence: z.number(),
   type: EmailTypeSchema,
   pattern: EmailPatternSchema.shape.pattern.optional(),
+  isDeliverable: z.boolean().optional(),
+  hasMxRecords: z.boolean().optional(),
+  verificationReason: z.string().optional(),
 });
 
 export type EmailCandidateRecord = z.infer<typeof EmailCandidateSchema>;
@@ -46,3 +51,15 @@ export const EmailPatternRecordSchema = z.object({
 });
 
 export type EmailPatternRecord = z.infer<typeof EmailPatternRecordSchema>;
+
+// DB に保存するための EmailVerification テーブル用スキーマ
+export const EmailVerificationRecordSchema = z.object({
+  id: z.uuid(),
+  email: z.string(),
+  isDeliverable: z.boolean(),
+  hasMxRecords: z.boolean(),
+  reason: z.string().optional(),
+  verifiedAt: z.string().datetime(),
+});
+
+export type EmailVerificationRecord = z.infer<typeof EmailVerificationRecordSchema>;

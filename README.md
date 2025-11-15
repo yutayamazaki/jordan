@@ -74,31 +74,26 @@ OPENAI_API_KEY=your-openai-api-key
 
 ## 実行方法
 
+このツールは、次の 2 つの実行パターンをサポートします。
+
+- 開発モード（TypeScript のまま実行）: `npm run dev -- ...`
+- ビルド済み JavaScript で実行: `npm start -- ...`（事前に `npm run build` が必要）
+
+また、対象企業は「企業リスト CSV ファイル」を指定する想定です。
+（CSV に複数企業を記載して一括処理します）
+
+さらに、処理フェーズを `--phase` オプションで制御できます。
+
+- `collect`: 情報収集のみ
+- `score`: 既存の収集結果に対するスコアリングのみ
+- `all`（デフォルト）: 収集＋スコアリングをまとめて実行
+
 ### 開発モード（ts-node）
-
-#### 単一企業を指定して実行
-
-```bash
-npm run dev -- "<会社名>" "<ドメイン>" "<部署>" [--debug]
-```
-
-例
-
-```bash
-npm run dev -- "株式会社さくらケーシーエス" "kcs.co.jp" "情報システム部"
-```
-
-- 引数:
-  - `<会社名>`: 例 `株式会社さくらケーシーエス`
-  - `<ドメイン>`: 例 `kcs.co.jp`
-  - `<部署>`: 例 `情報システム部`
-- オプション:
-  - `--debug`: Web 検索を行わず、ハードコードされたサンプル担当者を返すデバッグモード
 
 #### 企業リスト CSV を指定して実行
 
 ```bash
-npm run dev -- "<企業リストCSVパス>" [--debug]
+npm run dev -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all]
 ```
 
 CSV の例（ヘッダー必須）:
@@ -111,36 +106,74 @@ name,domain,department
 
 各行について、`name`・`domain`・`department` を読み取り、1 社ずつ順番にスキャンします。
 
+`--debug` や `--phase` を併用できます。
+
+- オプション:
+  - `--debug`:
+    - Web 検索を行わず、ハードコードされたサンプル担当者を返すデバッグモード
+    - OpenAI API / Web 検索を使わずにフローを確認したいときに利用します
+  - `--phase=collect|score|all`:
+    - `collect`: 情報収集（Web 検索・メールパターン推定・担当者候補抽出・メール検証）だけ実行し、生データを保存します
+    - `score`: 既に保存されている生データから CSV 出力だけ行います（新規の Web 検索やメール検証は行いません）
+    - `all`: `collect` と `score` を連続実行します（明示しない場合のデフォルト）
+
 ### ビルド＆実行
 
 ```bash
 # TypeScript をビルド
 npm run build
 
-# ビルド済み JavaScript を実行（単一企業）
-npm start -- "<会社名>" "<ドメイン>" "<部署>" [--debug]
-
 # ビルド済み JavaScript を実行（企業リスト CSV）
-npm start -- "<企業リストCSVパス>" [--debug]
+npm start -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all]
 ```
+
+`--phase` オプションの意味:
+
+- `collect`: 情報収集フェーズのみ（Web 検索・メールパターン推定・担当者候補抽出・メール検証）を実行し、生データを `outputs/company_scans/` に保存します（CSV には書き出しません）。
+- `score`: 既に `collect`（または `all`）で保存済みの生データを読み込み、スコアリングと CSV 出力のみを行います（新規の Web 検索やメール検証は行いません）。
+- `all`（デフォルト）: `collect` と `score` を連続実行します。
+
+### 典型的な利用パターン
+
+#### 1. 一度だけ収集して、そのまま CSV 出力まで行いたい場合
+
+```bash
+npm run dev -- "./companies.csv"
+```
+
+`--phase` を指定しない場合は `all` とみなされ、情報収集 → スコアリング → CSV 出力まで一度に実行されます。
+
+#### 2. 情報収集は一度だけ実行し、スコアリングや CSV 出力を何度かやり直したい場合
+
+```bash
+# まず collect だけ実行して生データを保存
+npm run dev -- "./companies.csv" --phase=collect
+
+# 後から score だけ実行（Web 検索やメール検証は再実行しない）
+npm run dev -- "./companies.csv" --phase=score
+```
+
+`collect` による生データは、各行の `domain` と `department` の組み合わせごとに  
+`outputs/company_scans/<domain>__<department>.json` という名前で保存されます。  
+`score` フェーズではこれらのファイルを読み込み、現在のロジックに基づいて CSV を再生成します。
 
 ---
 
 ## 出力される CSV
 
-`saveAsCsvFiles` により、常に `outputs/` 直下に「レコードごとの CSV ファイル」が生成されます。
+`saveAsCsvFiles` により、常に `outputs/` 直下に「テーブル単位の CSV ファイル」が 4 つ生成されます（複数社を処理した場合は追記されていきます）。
 
 - 出力先ディレクトリ: `outputs/`
 
-生成されるファイル例:
+生成されるファイル:
 
-- 会社レコード: `outputs/company_<ID>.csv`
+- 会社テーブル: `outputs/companies.csv`
   - カラム: `ID`, `Name`, `Domain`
-- 担当者レコード: `outputs/contact_<ID>.csv`
+- 担当者テーブル: `outputs/contacts.csv`
   - カラム: `ID`, `Company ID`, `Name`, `Position`, `Department`, `First Name`, `Last Name`
-- メールアドレス候補レコード: `outputs/email_candidate_<ID>.csv`
+- メールアドレス候補テーブル: `outputs/email_candidates.csv`
   - カラム: `ID`, `Contact ID`, `Email`, `Is Primary`, `Confidence`, `Type`, `Pattern`
-- メールパターンレコード: `outputs/email_pattern_<ID>.csv`
+- メールパターンテーブル: `outputs/email_patterns.csv`
   - カラム: `ID`, `Company ID`, `Pattern`, `Reason`
 
 ---
