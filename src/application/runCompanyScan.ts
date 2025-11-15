@@ -9,7 +9,6 @@ import {
   EmailPatternRecord,
 } from "../domain";
 import { EmailPattern } from "../domain/entities/emailPattern";
-import { CliOptions } from "../cli/parseCliArgs";
 import { z } from "zod";
 import { ContactResponse } from "../domain/entities/contact";
 import { ContactFinder, EmailPatternDetector, IdGenerator, LeadExporter } from "./ports";
@@ -72,8 +71,17 @@ export type RunCompanyScanDependencies = {
   idGenerator: IdGenerator;
 };
 
+export type CompanyScanOptions = {
+  company: {
+    name: string;
+    domain: string;
+  };
+  department: string;
+  debug: boolean;
+};
+
 export async function runCompanyScan(
-  options: CliOptions,
+  options: CompanyScanOptions,
   deps: RunCompanyScanDependencies,
 ): Promise<void> {
   const { company, department, debug } = options;
