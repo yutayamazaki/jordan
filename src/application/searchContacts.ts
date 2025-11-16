@@ -103,32 +103,11 @@ ${ContactListResponseSchema.toString()}
 };
 
 export async function searchContacts(
-  debug: boolean = false,
   name: string,
   domain: string,
   department: string,
 ): Promise<ContactResponse[]> {
   console.log("\n👺 Search Web to get contact info ...");
-  if (debug) {
-    return [
-      {
-        name: "松尾 庄馬",
-        position: "取締役",
-        department: "経営本部",
-        firstName: "shoma",
-        lastName: "matsuo",
-        sources: [],
-      },
-      {
-        name: "山崎 祐太",
-        position: "代表取締役",
-        department: "経営本部",
-        firstName: "yuta",
-        lastName: "yamazaki",
-        sources: [],
-      },
-    ];
-  }
   const contactSearchPrompt = createContactSearchPrompt(name, domain, department);
   const result = await createStructuredOutputs(
     contactSearchPrompt,

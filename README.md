@@ -1,212 +1,239 @@
-# jordan-ai
+# Jordan
 
 B2B 企業の担当者情報を Web 検索＋LLM（OpenAI Structured Outputs）で収集し、  
-メールアドレスのパターン推定とアドレス候補生成までを自動化し、CSV で出力する CLI ツールです。
+メールアドレスのパターン推定・候補生成・EmailHippo による検証結果を SQLite に保存する CLI ツールです。
 
----
+## 機能概要
 
-## 機能概要・全体設計
-
-- 会社名・ドメイン名・ターゲット部署を入力すると、  
-  - Web 検索結果から担当者候補（氏名／役職／部署）を抽出
+- 会社名・ドメイン名・ターゲット部署（例: 情シス、マーケなど）を入力すると:
+  - Web 検索結果から担当者候補（氏名／役職／部署）を抽出（LLM 利用）
   - 氏名のローマ字（姓・名）を推定
-- 会社ドメインから、実際に公開されているメールアドレス例をもとに  
-  - 一般的なメールアドレス構成パターン（例: `first.last`, `f_last` など）を推定
-- 担当者情報とメールパターンから、複数のメールアドレス候補を生成
-- 候補メールアドレスに対して、DNS MX レコードによる deliverability チェックを実施
-- さらに、EmailHippo などで手動検証した結果を CSV から読み込み、スコアリングに統合
-- 上記の情報を CSV（疑似 DB テーブル形式）として `outputs/` 以下に保存
+- 会社ドメインに紐づく公開メールアドレスや過去の検証結果から:
+  - 一般的なメールアドレス構成パターン（`first.last`, `f_last` など）を推定
+- 担当者情報＋推定パターンから複数のメールアドレス候補を生成
+- EmailHippo API で deliverability（届くかどうか）やリスクスコアを検証
+- すべての結果を SQLite（`data/jordan.sqlite`）のテーブルとして保存
 
-### アーキテクチャ概要
+## アーキテクチャ概要
 
-- 2 フェーズ構成
-  - **collect フェーズ**（`collectCompanyScan`）
-    - メールパターン推定
-    - Web 検索による担当者情報取得
-    - メール候補生成
-    - DNS MX によるメール検証
-    - 以上の「生データ」を JSON として `outputs/company_scans/` に保存
-  - **score フェーズ**（`scoreCompanyScan`）
-    - 保存済みの生データを読み込み
-    - EmailHippo CSV（任意）と DNS 検証結果を統合したスコアリング
-    - 「疑似 DB テーブル」形式の CSV を `outputs/` に出力
-- メール検証キャッシュ
-  - `outputs/email_verifications.json` に検証結果を保存
-  - 一定期間（デフォルト 90 日）以内の結果は再利用し、DNS への問い合わせ回数を削減
+このツールは大きく **collect フェーズ** と **score フェーズ** の 2 段階で動作します。
 
----
+### 1. collect フェーズ（収集）
 
-## 必要要件
+- 実装: `collectCompanyScan`（`src/application/runCompanyScan.ts`）
+- 主な処理:
+  - メールパターン推定
+    - LLM（`LlmEmailPatternDetector`）によるドメインごとのパターン推定
+    - 過去の学習パターン（`email_patterns` テーブル）を優先的に使用
+  - Web 検索＋LLM による担当者候補取得（`LlmContactFinder`）
+  - 担当者情報からメール候補生成（`createContactAndEmailCandidates`）
+  - 上記の「生データ」を `CompanyScanRawData` として JSON 化
+  - JSON を `company_scans` テーブルに保存（`SqliteCompanyScanRawStore`）
 
-- Node.js 18 以上（20 以降推奨）
-- npm
-- OpenAI API キー
-  - 環境変数 `OPENAI_API_KEY`（`.env`）から読み込みます
+collect フェーズは、「あとから再スコアリング可能な生データ」を蓄積する役割です。
 
----
+### 2. score フェーズ（検証・スコアリング）
+
+- 実装: `scoreCompanyScan` / `scoreCompanyScanFromStored`（`src/application/runCompanyScan.ts`）
+- 主な処理:
+  - `company_scans` から `CompanyScanRawData` を読み込み
+  - EmailHippo API（`EmailHippoApiEmailVerifier`）でメールアドレスを検証
+  - 検証結果は `email_verifications` テーブルにキャッシュ
+  - 検証結果をもとに各メール候補の confidence を補正
+  - ドメインオブジェクトをテーブルレコード化し、SQLite に保存（`SqliteLeadExporter`）
+    - `companies`
+    - `contacts`
+    - `email_candidates`
+    - `email_patterns`
+  - 各ドメインのメールパターンごとに
+    - `successCount`（deliverable 件数）
+    - `totalCount`（検証件数）
+    を集計し、`email_patterns` として保存（メールパターン学習）
+
+score フェーズは、「収集済みの生データに対して後から検証と学習を行う」役割です。
+
+### 3. collect / score / all のオーケストレーション
+
+- `src/application/runCompanyScan.ts`
+  - `collectCompanyScan` … collect フェーズ単体
+  - `scoreCompanyScan` … 渡された生データに対する score フェーズ
+  - `scoreCompanyScanFromStored` … DB に保存済みの生データに対する score フェーズ
+  - `runCompanyScan` … `phase: "collect" | "score" | "all"` に応じて上記を組み合わせて実行
+
+## ドメインモデル・スキーマ
+
+### `src/domain/index.ts`
+
+DB に保存するレコード形式を `zod` で定義しています。
+
+- `CompanySchema` / `CompanyRecord`
+  - `id`, `name`, `domain`
+- `ContactSchema` / `ContactRecord`
+  - `id`, `companyId`, `name`, `position`, `department`, `departmentCategory`, `firstName`, `lastName`
+- `EmailCandidateSchema` / `EmailCandidateRecord`
+  - 1 人の担当者に紐づく複数候補メールアドレス
+  - `isPrimary`, `confidence`, `type`, `pattern`, `isDeliverable`, `hasMxRecords`, `verificationReason` など
+- `EmailPatternRecordSchema` / `EmailPatternRecord`
+  - ドメインごとのメールパターン学習結果
+  - `pattern`, `reason`, `domain`, `source`, `sampleEmail`, `verifiedAt`, `successCount`, `totalCount`
+- `EmailVerificationRecordSchema` / `EmailVerificationRecord`
+  - EmailHippo などの検証結果のキャッシュ
+  - さまざまな検証結果フィールド（syntax, DNS, mailbox, risk, trust score など）を保持
+
+### `src/domain/entities/`
+
+アプリケーション内部で扱うドメインエンティティです。
+
+- `Company`, `Contact`, `EmailPattern`, `EmailAddress`, `Department` など
+- アプリケーション層はエンティティベースでロジックを書き、  
+  インフラ層で `zod` スキーマに変換して SQLite に保存します。
+
+## ディレクトリ構成（主要ファイル）
+
+- `src/collect.ts`
+  - **collect 専用** のエントリーポイント
+  - 企業リスト CSV を読み込み、collect フェーズ（収集）のみを実行
+- `src/score.ts`
+  - **score 専用** のエントリーポイント
+  - 事前に collect 済みの企業に対して score フェーズ（検証・スコアリング）のみを実行
+- `src/bootstrap/deps.ts`
+  - アプリケーションで使用する依存（LLM アダプタ、EmailHippo アダプタ、SQLite リポジトリなど）を組み立てる共通モジュール
+  - `createRunCompanyScanDeps()` で `RunCompanyScanWithStoreDependencies` を構築
+
+### CLI 周り
+
+- `src/cli/parseCliArgs.ts`
+  - 位置引数: `csvPath`
+  - オプション:
+    - `--phase=collect|score|all`（指定がない場合、呼び出し側が渡すデフォルト値を採用）
+    - `--email-verifications-csv=...`（将来的な CSV 出力用）
+- `src/cli/loadCompaniesFromCsv.ts`
+  - 企業リスト CSV から `{ company, department }` の配列に変換
+
+### アプリケーション層
+
+- `src/application/runCompanyScan.ts`
+  - collect / score / all フェーズのオーケストレーション
+  - `CompanyScanRawStore` 経由で生データ (`CompanyScanRawData`) の保存・読み込み
+- `src/application/companyScanDomain.ts`
+  - メールパターン決定ロジック（`decideEmailPattern`）
+  - 担当者＋メールアドレス候補生成（`createContactAndEmailCandidates`）
+  - メール検証結果から confidence を調整（`adjustEmailConfidence`）
+  - ドメインエンティティから DB レコード（`CompanyRecord` など）を構築（`buildCompanyDomainEntities`）
+- `src/application/emailFinderService.ts`
+  - 名前とパターンから複数のメール候補を生成
+- `src/application/ports.ts`
+  - アプリケーション層が利用するポート（インターフェース）定義
+  - `ContactFinder`, `EmailPatternDetector`, `EmailVerifier`,  
+    `LeadExporter`, `EmailVerificationRepository`, `EmailPatternRepository`, `IdGenerator` など
+
+### アダプタ層
+
+- `src/adapters/openai.ts`
+  - OpenAI SDK を使った Structured Outputs 用ラッパ
+  - `OPENAI_API_KEY` を利用
+- `src/adapters/llmEmailPatternDetector.ts`
+  - ドメインからメールパターンを推定する LLM アダプタ
+- `src/adapters/llmContactFinder.ts`
+  - Web 検索＋LLM で担当者情報を取得するアダプタ
+- `src/adapters/emailHippoApiEmailVerifier.ts`
+  - EmailHippo API を呼び出し、`EmailVerificationResult` にマッピング
+  - `EMAIL_HIPPO_API_KEY` を利用
+
+### インフラ層
+
+- `src/infrastructure/sqliteClient.ts`
+  - `better-sqlite3` を用いた SQLite クライアント
+  - 初回アクセス時に `data/jordan.sqlite` を開き、必要なテーブルを `CREATE TABLE IF NOT EXISTS` で作成
+- `src/infrastructure/sqliteLeadExporter.ts`
+  - スコアリング済みのレコードを SQLite の `companies` / `contacts` / `email_candidates` / `email_patterns` に保存
+- `src/infrastructure/sqliteCompanyScanRawStore.ts`
+  - collect フェーズの生データ (`CompanyScanRawData`) を `company_scans` テーブルに保存・読み込み
+- `src/infrastructure/sqliteEmailVerificationRepository.ts`
+  - EmailHippo の検証結果を `email_verifications` テーブルに保存し、一定期間内の結果を再利用
+- `src/infrastructure/sqliteEmailPatternRepository.ts`
+  - メールパターン学習結果を `email_patterns` テーブルに保存・取得
+- `src/infrastructure/idGenerator.ts`
+  - UUID ベースの ID 生成
 
 ## セットアップ
 
+### 前提
+
+- Node.js（推奨: 18 以降）
+
+### インストール
+
 ```bash
-# 依存パッケージのインストール
 npm install
 ```
 
-リポジトリ直下に `.env` ファイルを作成し、OpenAI API キーを設定します:
+### 環境変数
 
-```env
-OPENAI_API_KEY=your-openai-api-key
-```
-
-※ `.env` は Git にコミットしないように注意してください。
-
----
-
-## 実行方法
-
-このツールは、次の 2 つの実行パターンをサポートします。
-
-- 開発モード（TypeScript のまま実行）: `npm run dev -- ...`
-- ビルド済み JavaScript で実行: `npm start -- ...`（事前に `npm run build` が必要）
-
-また、対象企業は「企業リスト CSV ファイル」を指定する想定です。
-（CSV に複数企業を記載して一括処理します）
-
-さらに、処理フェーズを `--phase` オプションで制御できます。
-
-- `collect`: 情報収集のみ
-- `score`: 既存の収集結果に対するスコアリングのみ
-- `all`（デフォルト）: 収集＋スコアリングをまとめて実行
-
-### 開発モード（ts-node）
-
-#### 企業リスト CSV を指定して実行
+`.env` などで以下を設定します。
 
 ```bash
-npm run dev -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all] [--email-verifications-csv=<EmailHippo CSVパス>]
+OPENAI_API_KEY=sk-...
+
+EMAIL_HIPPO_API_KEY=your_email_hippo_key
 ```
 
-CSV の例（ヘッダー必須）:
+SQLite の DB パスはデフォルトで `data/jordan.sqlite` が使われます（`getDb()` の引数で上書き可能）。
 
-```csv
-name,domain,department
-株式会社さくらケーシーエス,kcs.co.jp,情報システム部
-株式会社ABCホールディングス,abc.co.jp,経営企画部
-```
+## 使い方
 
-各行について、`name`・`domain`・`department` を読み取り、1 社ずつ順番にスキャンします。
-
-`--debug` や `--phase` を併用できます。
-
-- オプション:
-  - `--debug`:
-    - Web 検索を行わず、ハードコードされたサンプル担当者を返すデバッグモード
-    - OpenAI API / Web 検索を使わずにフローを確認したいときに利用します
-  - `--phase=collect|score|all`:
-    - `collect`: 情報収集（Web 検索・メールパターン推定・担当者候補抽出・メール検証）だけ実行し、生データを保存します
-    - `score`: 既に保存されている生データから CSV 出力だけ行います（新規の Web 検索やメール検証は行いません）
-    - `all`: `collect` と `score` を連続実行します（明示しない場合のデフォルト）
-  - `--email-verifications-csv=<path>`:
-    - EmailHippo などで手動検証したメールアドレスの CSV を指定
-    - `score` フェーズで DNS 検証結果より優先してスコアリングに利用されます
-
-### ビルド＆実行
+### ビルド
 
 ```bash
-# TypeScript をビルド
 npm run build
-
-# ビルド済み JavaScript を実行（企業リスト CSV）
-npm start -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all] [--email-verifications-csv=<EmailHippo CSVパス>]
 ```
 
-`--phase` オプションの意味:
-
-- `collect`: 情報収集フェーズのみ（Web 検索・メールパターン推定・担当者候補抽出・メール検証）を実行し、生データを `outputs/company_scans/` に保存します（CSV には書き出しません）。
-- `score`: 既に `collect`（または `all`）で保存済みの生データを読み込み、スコアリングと CSV 出力のみを行います（新規の Web 検索やメール検証は行いません）。
-- `all`（デフォルト）: `collect` と `score` を連続実行します。
-
-### 典型的な利用パターン
-
-#### 1. 一度だけ収集して、そのまま CSV 出力まで行いたい場合
+### 1. collect フェーズだけ実行
 
 ```bash
-npm run dev -- "./companies.csv"
+npm run collect -- ./inputs/companies.csv
 ```
 
-`--phase` を指定しない場合は `all` とみなされ、情報収集 → スコアリング → CSV 出力まで一度に実行されます。
+- 各企業について
+  - メールパターン推定
+  - 担当者候補収集
+  - メール候補生成
+  が行われ、結果は `company_scans` テーブルに保存されます。
 
-#### 2. 情報収集は一度だけ実行し、スコアリングや CSV 出力を何度かやり直したい場合
+### 2. score フェーズだけ実行
 
 ```bash
-# まず collect だけ実行して生データを保存
-npm run dev -- "./companies.csv" --phase=collect
-
-# 後から score だけ実行（Web 検索やメール検証は再実行しない）
-# EmailHippo 検証結果（任意）がある場合は同時に指定
-npm run dev -- "./companies.csv" --phase=score --email-verifications-csv="./emailhippo.csv"
+npm run score -- ./inputs/companies.csv
 ```
 
-`collect` による生データは、各行の `domain` と `department` の組み合わせごとに  
-`outputs/company_scans/<domain>__<department>.json` という名前で保存されます。  
-`score` フェーズではこれらのファイルを読み込み、現在のロジックに基づいて CSV を再生成します。
+- 事前に collect フェーズで `company_scans` に保存された生データを前提とします。
+- 各企業のメール候補に対して EmailHippo 検証を行い、結果を
+  - `email_verifications`
+  - `email_candidates`
+  - `email_patterns`
+  などのテーブルに反映します。
 
----
+## 出力・データ構造
 
-## 出力される CSV
+- SQLite DB: `data/jordan.sqlite`
+  - `companies` … 会社マスタ
+  - `contacts` … 担当者マスタ
+  - `email_candidates` … メール候補（deliverable 情報・confidence 付き）
+  - `email_patterns` … ドメインごとのメールパターン学習結果
+  - `email_verifications` … メール検証結果キャッシュ
+  - `company_scans` … collect フェーズでの生データ JSON
 
-`saveAsCsvFiles` により、常に `outputs/` 直下に「テーブル単位の CSV ファイル」が 4 つ生成されます（複数社を処理した場合は追記されていきます）。
-
-- 出力先ディレクトリ: `outputs/`
-
-生成されるファイル（いずれも複数社分を追記していきます）:
-
-- 会社テーブル: `outputs/companies.csv`
-  - カラム: `ID`, `Name`, `Domain`
-- 担当者テーブル: `outputs/contacts.csv`
-  - カラム: `ID`, `Company ID`, `Name`, `Position`, `Department`, `First Name`, `Last Name`
-- メールアドレス候補テーブル: `outputs/email_candidates.csv`
-  - カラム: `ID`, `Contact ID`, `Email`, `Is Primary`, `Confidence`, `Type`, `Pattern`, `Is Deliverable`, `Has MX Records`, `Verification Reason`
-- メールパターンテーブル: `outputs/email_patterns.csv`
-  - カラム: `ID`, `Company ID`, `Pattern`, `Reason`
-
-内部的には、メール検証結果は `EmailVerificationRecordSchema` に従って  
-`outputs/email_verifications.json` にキャッシュされます（CSV には直接出力されません）。
-
----
-
-## メールパターンと候補生成ロジック
-
-- メールパターン推定（`detectEmailPattern`）
-  - `EmailPatternSchema` に定義されたパターン（例: `first.last`, `last_first`, `f.last`, `flast` など）から 1 つを選択
-  - Web 上の公開メールアドレスをもとに、どのパターンが主に使われているかを LLM で推定
-- メール候補生成（`generateEmailCandidates`）
-  - `firstName`, `lastName`, `domain` と推定パターンをもとに、複数のメール候補を生成
-  - 推定されたパターンがある場合は、そのパターンに合致する候補を優先的に先頭に並べる
-
-## メール検証とスコアリングロジック
-
-- DNS MX 検証（`DnsMxEmailVerifier`）
-  - ドメインの MX レコードを引き、存在すれば `hasMxRecords = true` として `isDeliverable` を真寄りに評価
-- EmailHippo の手動検証結果（`emailHippoCsvLoader`）
-  - `CheckedEmailAddress`, `Status`, `AdditionalStatusInfo` などの列を読み込み
-  - `Status === "Ok"` の場合は高いスコア、`Bad` などの場合は低いスコアとして扱う
-- スコア統合（`adjustEmailConfidence`）
-  - EmailHippo の結果があるメールアドレスはそちらを優先
-    - OK の場合は confidence を最低 0.9 まで引き上げ
-    - NG の場合は最大 0.1 まで下げる
-  - EmailHippo 結果がない場合は、DNS/MX の有無に応じて confidence を微調整
-
----
+必要に応じて、この DB から CSV をエクスポートして既存の CRM / MA ツールにインポートできます。
 
 ## 注意事項
 
-- OpenAI API と Web 検索を利用するため、実行時に API 利用料金が発生します。
-- Web 上の情報に依存するため、取得される担当者情報は不完全・誤りを含む可能性があります。
-
----
+- OpenAI API および EmailHippo API の利用に伴い、実行時に API 利用料金が発生します。
+- Web 上の情報に依存するため、取得される担当者情報には誤りや古い情報が含まれる可能性があります。
+- メール検証はあくまで外部サービスの判断に基づくものであり、実送信の成否を完全に保証するものではありません。
 
 ## 今後の拡張アイデア
 
-- 取得結果の重複排除やスコアリング（役職・部署・出典ページなどに基づく）  
-- 既存 CRM / MA ツールへのインポート用フォーマット拡張
+- 役職・部署・出典ページなどを使ったリードスコアリング
+- ドメイン／パターンごとの AB テスト・精度評価
+- 既存 CRM / MA ツール用のエクスポートフォーマット拡張
+- 取得結果の重複排除や、タイムウィンドウ別の履歴管理

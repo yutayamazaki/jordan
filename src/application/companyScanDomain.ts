@@ -42,8 +42,11 @@ export type ContactAndEmailCandidates = z.infer<
 >;
 
 export type EmailPatternDecisionInput = {
-  debug: boolean;
   detectedEmailPattern: EmailPattern | null;
+  learnedPattern?: {
+    pattern: EmailPattern["pattern"];
+    reason: string;
+  } | null;
 };
 
 export type EmailPatternDecisionResult = {
@@ -57,13 +60,28 @@ export function decideEmailPattern(
   input: EmailPatternDecisionInput,
   idGenerator: IdGenerator,
 ): EmailPatternDecisionResult {
-  const { debug, detectedEmailPattern } = input;
+  const { detectedEmailPattern, learnedPattern } = input;
 
-  if (debug) {
+  if (learnedPattern) {
+    const pattern = learnedPattern.pattern;
+    const record: EmailPatternRecord[] = [
+      EmailPatternRecordSchema.parse({
+        id: idGenerator.generate(),
+        companyId,
+        pattern,
+        reason: learnedPattern.reason,
+      }),
+    ];
+
     return {
-      pattern: DEFAULT_EMAIL_PATTERN,
-      record: [],
-      logMessages: [],
+      pattern,
+      record,
+      logMessages: [
+        "Using learned email pattern from past results:",
+        pattern,
+        "Learned email pattern reason:",
+        learnedPattern.reason,
+      ],
     };
   }
 

@@ -9,20 +9,66 @@ import { ContactResponse } from "../domain/entities/contact";
 
 export type EmailVerificationSource = "dns_mx" | "email_hippo";
 
+export type EmailHippoMailboxResult =
+  | "Ok"
+  | "Bad"
+  | "CatchAll"
+  | "Unknown"
+  | string;
+
+export type EmailHippoSendRecommendation =
+  | "SafeToSend"
+  | "TreatWithCaution"
+  | "DoNotSend"
+  | string;
+
+export type EmailHippoTrustLevel = "High" | "Medium" | "Low" | string;
+
 export type EmailVerificationResult = {
+  // 共通フィールド
   email: string;
   isDeliverable: boolean;
   hasMxRecords: boolean;
   reason?: string;
 
-  // 検証ソース（DNS/MX or EmailHippo）
+  // 検証ソース
   source: EmailVerificationSource;
 
-  // EmailHippo CSV の列（DNS/MX の場合は undefined）
-  status?: string; // Status
-  additionalStatusInfo?: string; // AdditionalStatusInfo
-  domainCountryCode?: string; // DomainCountryCode
-  mailServerCountryCode?: string; // MailServerCountryCode
+  // EmailHippo メールボックス検証
+  mailboxResult?: EmailHippoMailboxResult;
+  mailboxReason?: string;
+
+  // シンタックス / DNS
+  syntaxIsValid?: boolean;
+  syntaxReason?: string;
+  domainHasDnsRecord?: boolean;
+  domainHasMxRecords?: boolean;
+
+  // 送信品質・推奨
+  inboxQualityScore?: number;
+  sendRecommendation?: EmailHippoSendRecommendation;
+
+  // スパム・リスク
+  isDisposableEmailAddress?: boolean;
+  isSpamTrap?: boolean;
+  overallRiskScore?: number;
+
+  // 信頼スコア
+  hippoTrustScore?: number;
+  hippoTrustLevel?: EmailHippoTrustLevel;
+
+  // インフラ情報
+  mailServerLocation?: string;
+  mailServiceTypeId?: string;
+
+  // 国情報（CSV や API から取得できる場合）
+  status?: string;
+  additionalStatusInfo?: string;
+  domainCountryCode?: string;
+  mailServerCountryCode?: string;
+
+  // デバッグ用の生レスポンス断片
+  rawResponseSnippet?: string;
 };
 
 export interface EmailPatternDetector {
@@ -31,7 +77,6 @@ export interface EmailPatternDetector {
 
 export interface ContactFinder {
   searchContacts(
-    debug: boolean,
     companyName: string,
     domain: string,
     department: string,
@@ -48,6 +93,14 @@ export interface EmailVerificationRepository {
     maxAgeDays: number,
   ): Promise<EmailVerificationResult | null>;
   save(result: EmailVerificationResult): Promise<void>;
+}
+
+export interface EmailPatternRepository {
+  findRecentByDomain(
+    domain: string,
+    maxAgeDays: number,
+  ): Promise<EmailPatternRecord | null>;
+  save(record: EmailPatternRecord): Promise<void>;
 }
 
 export interface LeadExporter {

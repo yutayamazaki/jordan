@@ -1,5 +1,5 @@
 import { OpenAI } from "openai";
-import { zodResponseFormat, zodTextFormat } from "openai/helpers/zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import { Result, ok, err } from "neverthrow";
 import { z, ZodType } from "zod";
 

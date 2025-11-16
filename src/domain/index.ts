@@ -48,6 +48,13 @@ export const EmailPatternRecordSchema = z.object({
   companyId: z.uuid(),
   pattern: EmailPatternSchema.shape.pattern,
   reason: z.string(),
+  // 過去学習したパターンを保存するためのメタ情報（任意）
+  domain: z.string().optional(),
+  source: z.enum(["llm", "email_hippo"]).optional(),
+  sampleEmail: z.string().optional(),
+  verifiedAt: z.string().datetime().optional(),
+  successCount: z.number().int().nonnegative().optional(),
+  totalCount: z.number().int().nonnegative().optional(),
 });
 
 export type EmailPatternRecord = z.infer<typeof EmailPatternRecordSchema>;
@@ -61,10 +68,26 @@ export const EmailVerificationRecordSchema = z.object({
   reason: z.string().optional(),
   verifiedAt: z.string().datetime(),
   source: z.enum(["dns_mx", "email_hippo"]).optional(),
+  mailboxResult: z.string().optional(),
+  mailboxReason: z.string().optional(),
+  syntaxIsValid: z.boolean().optional(),
+  syntaxReason: z.string().optional(),
+  domainHasDnsRecord: z.boolean().optional(),
+  domainHasMxRecords: z.boolean().optional(),
+  inboxQualityScore: z.number().optional(),
+  sendRecommendation: z.string().optional(),
+  isDisposableEmailAddress: z.boolean().optional(),
+  isSpamTrap: z.boolean().optional(),
+  overallRiskScore: z.number().optional(),
+  hippoTrustScore: z.number().optional(),
+  hippoTrustLevel: z.string().optional(),
+  mailServerLocation: z.string().optional(),
+  mailServiceTypeId: z.string().optional(),
   status: z.string().optional(),
   additionalStatusInfo: z.string().optional(),
   domainCountryCode: z.string().optional(),
   mailServerCountryCode: z.string().optional(),
+  rawResponseSnippet: z.string().optional(),
 });
 
 export type EmailVerificationRecord = z.infer<typeof EmailVerificationRecordSchema>;

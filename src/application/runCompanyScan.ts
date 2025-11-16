@@ -9,6 +9,11 @@ import {
   LeadExporter,
   EmailVerificationRepository,
 } from "./ports";
+import { EmailPatternRepository } from "./ports";
+import {
+  EmailPatternRecord,
+  EmailPatternRecordSchema,
+} from "../domain";
 import {
   buildCompanyDomainEntities,
   createContactAndEmailCandidates,
@@ -24,6 +29,7 @@ export type RunCompanyScanDependencies = {
   leadExporter: LeadExporter;
   idGenerator: IdGenerator;
   emailVerificationRepository: EmailVerificationRepository;
+  emailPatternRepository: EmailPatternRepository;
 };
 
 export type CompanyScanOptions = {
@@ -32,7 +38,6 @@ export type CompanyScanOptions = {
     domain: string;
   };
   department: string;
-  debug: boolean;
 };
 
 export type CompanyScanPhase = "collect" | "score" | "all";
@@ -44,11 +49,9 @@ export type CompanyScanRawData = {
     domain: string;
   };
   department: string;
-  debug: boolean;
   patternDecision: EmailPatternDecisionResult;
   contacts: ContactResponse[];
   candidates: ContactAndEmailCandidates[];
-  emailVerificationResults: EmailVerificationResult[];
 };
 
 export interface CompanyScanRawStore {
@@ -67,21 +70,32 @@ export async function collectCompanyScan(
   options: CompanyScanOptions,
   deps: RunCompanyScanWithStoreDependencies,
 ): Promise<CompanyScanRawData> {
-  const { company, department, debug } = options;
+  const { company, department } = options;
 
   let detectedEmailPattern: EmailPattern | null = null;
   let emailPattern: EmailPattern["pattern"];
-  if (!debug) {
-    console.log("\n👺 Detect email pattern by web search ...");
-    detectedEmailPattern = await deps.emailPatternDetector.detect(company.domain);
-  }
+  console.log("\n👺 Detect email pattern by web search ...");
+  detectedEmailPattern = await deps.emailPatternDetector.detect(company.domain);
 
   const companyId = deps.idGenerator.generate();
+
+  const MAX_PATTERN_AGE_DAYS = 365;
+  const learnedPatternRecord =
+    await deps.emailPatternRepository.findRecentByDomain(
+      company.domain,
+      MAX_PATTERN_AGE_DAYS,
+    );
+
   const patternDecision = decideEmailPattern(
     companyId,
     {
-      debug,
       detectedEmailPattern,
+      learnedPattern: learnedPatternRecord
+        ? {
+            pattern: learnedPatternRecord.pattern,
+            reason: learnedPatternRecord.reason,
+          }
+        : null,
     },
     deps.idGenerator,
   );
@@ -90,7 +104,6 @@ export async function collectCompanyScan(
   patternDecision.logMessages.forEach((message) => console.log(message));
 
   const contacts = await deps.contactFinder.searchContacts(
-    debug,
     company.name,
     company.domain,
     department,
@@ -103,49 +116,13 @@ export async function collectCompanyScan(
   const candidates = createContactAndEmailCandidates(contacts, company.domain, emailPattern);
   console.log("Contact and Email Candidates:", JSON.stringify(candidates, null, 2));
 
-  // メールアドレス検証（MX レコードベースの簡易チェック）
-  console.log("\n👺 Verify email deliverability (MX records) ...");
-  const allEmails = new Set<string>();
-  candidates.forEach((candidate) => {
-    allEmails.add(candidate.primaryEmail.value);
-    candidate.alternativeEmails.forEach((alt) => allEmails.add(alt.value));
-  });
-
-  const MAX_AGE_DAYS = 90;
-
-  const emailVerificationEntries = await Promise.all(
-    Array.from(allEmails).map(async (email) => {
-      const cached = await deps.emailVerificationRepository.findRecent(
-        email,
-        MAX_AGE_DAYS,
-      );
-      if (cached) {
-        console.log(
-          `Using cached email verification result (within ${MAX_AGE_DAYS} days):`,
-          email,
-        );
-        return [email, cached] as const;
-      }
-
-      const fresh = await deps.emailVerifier.verify(email);
-      await deps.emailVerificationRepository.save(fresh);
-      return [email, fresh] as const;
-    }),
-  );
-
-  const emailVerificationResults: EmailVerificationResult[] = emailVerificationEntries.map(
-    ([, result]) => result,
-  );
-
   const raw: CompanyScanRawData = {
     companyId,
     company,
     department,
-    debug,
     patternDecision,
     contacts,
     candidates,
-    emailVerificationResults,
   };
 
   await deps.rawStore.save(raw);
@@ -155,20 +132,56 @@ export async function collectCompanyScan(
 
 export async function scoreCompanyScan(
   raw: CompanyScanRawData,
-  deps: Pick<RunCompanyScanDependencies, "leadExporter">,
-  emailVerificationOverrides?: Map<string, EmailVerificationResult>,
+  deps: Pick<
+    RunCompanyScanDependencies,
+    | "leadExporter"
+    | "emailVerifier"
+    | "emailVerificationRepository"
+    | "emailPatternRepository"
+    | "idGenerator"
+  >,
 ): Promise<void> {
   console.log("\n👺 Convert to DB table records ...");
 
-  const emailVerificationMap = new Map<string, EmailVerificationResult>(
-    raw.emailVerificationResults.map((result) => [result.email, result]),
+  console.log("\n👺 Verify email deliverability with EmailHippo ...");
+
+  const allEmails = new Set<string>();
+  raw.candidates.forEach((candidate) => {
+    allEmails.add(candidate.primaryEmail.value);
+    candidate.alternativeEmails.forEach((alt) => allEmails.add(alt.value));
+  });
+
+  const MAX_AGE_DAYS = 180;
+
+  const emailVerificationEntries = await Promise.all(
+    Array.from(allEmails).map(async (email) => {
+      const cached = await deps.emailVerificationRepository.findRecent(
+        email,
+        MAX_AGE_DAYS,
+      );
+      if (cached) {
+        console.log(
+          `Using cached EmailHippo verification result (within ${MAX_AGE_DAYS} days):`,
+          email,
+        );
+        return [email, cached] as const;
+      }
+
+      const fresh = await deps.emailVerifier.verify(email);
+      const isHippoApiError =
+        fresh.source === "email_hippo" &&
+        fresh.reason?.startsWith("EmailHippo API call failed:");
+
+      if (!isHippoApiError) {
+        await deps.emailVerificationRepository.save(fresh);
+      }
+      return [email, fresh] as const;
+    }),
   );
 
-  if (emailVerificationOverrides) {
-    for (const [email, override] of emailVerificationOverrides) {
-      emailVerificationMap.set(email, override);
-    }
-  }
+  const emailVerificationMap = new Map<string, EmailVerificationResult>(
+    emailVerificationEntries.map(([email, result]) => [email, result]),
+  );
 
   const {
     companyRecords,
@@ -183,6 +196,16 @@ export async function scoreCompanyScan(
     emailVerificationMap,
   );
 
+  // EmailHippo の結果を元に EmailPattern を学習・更新
+  const totalForPattern = emailCandidateRecords.filter(
+    (r) => r.pattern === raw.patternDecision.pattern,
+  ).length;
+  const deliverableForPattern = emailCandidateRecords.filter(
+    (r) =>
+      r.pattern === raw.patternDecision.pattern && r.isDeliverable === true,
+  );
+
+  // 先に会社・担当者・メール候補を保存してからパターンを保存する
   await deps.leadExporter.export(
     raw.company.domain,
     companyRecords,
@@ -190,6 +213,24 @@ export async function scoreCompanyScan(
     emailCandidateRecords,
     raw.patternDecision.record,
   );
+
+  if (totalForPattern > 0) {
+    const sampleEmail = deliverableForPattern[0]?.email;
+    const patternRecord: EmailPatternRecord = EmailPatternRecordSchema.parse({
+      id: deps.idGenerator.generate(),
+      companyId: raw.companyId,
+      pattern: raw.patternDecision.pattern,
+      reason: `Learned from EmailHippo results: ${deliverableForPattern.length}/${totalForPattern} deliverable`,
+      domain: raw.company.domain,
+      source: "email_hippo",
+      sampleEmail,
+      verifiedAt: new Date().toISOString(),
+      successCount: deliverableForPattern.length,
+      totalCount: totalForPattern,
+    });
+
+    await deps.emailPatternRepository.save(patternRecord);
+  }
 }
 
 export async function scoreCompanyScanFromStored(
@@ -197,8 +238,11 @@ export async function scoreCompanyScanFromStored(
   deps: {
     rawStore: CompanyScanRawStore;
     leadExporter: LeadExporter;
+    emailVerifier: EmailVerifier;
+    emailVerificationRepository: EmailVerificationRepository;
+    emailPatternRepository: EmailPatternRepository;
+    idGenerator: IdGenerator;
   },
-  emailVerificationOverrides?: Map<string, EmailVerificationResult>,
 ): Promise<void> {
   const { company, department } = options;
 
@@ -216,8 +260,13 @@ export async function scoreCompanyScanFromStored(
 
   await scoreCompanyScan(
     raw,
-    { leadExporter: deps.leadExporter },
-    emailVerificationOverrides,
+    {
+      leadExporter: deps.leadExporter,
+      emailVerifier: deps.emailVerifier,
+      emailVerificationRepository: deps.emailVerificationRepository,
+      emailPatternRepository: deps.emailPatternRepository,
+      idGenerator: deps.idGenerator,
+    },
   );
 }
 
@@ -225,7 +274,6 @@ export async function runCompanyScan(
   options: CompanyScanOptions,
   deps: RunCompanyScanWithStoreDependencies,
   phase: CompanyScanPhase = "all",
-  emailVerificationOverrides?: Map<string, EmailVerificationResult>,
 ): Promise<void> {
   if (phase === "collect") {
     await collectCompanyScan(options, deps);
@@ -238,8 +286,11 @@ export async function runCompanyScan(
       {
         rawStore: deps.rawStore,
         leadExporter: deps.leadExporter,
+        emailVerifier: deps.emailVerifier,
+        emailVerificationRepository: deps.emailVerificationRepository,
+        emailPatternRepository: deps.emailPatternRepository,
+        idGenerator: deps.idGenerator,
       },
-      emailVerificationOverrides,
     );
     return;
   }
@@ -247,7 +298,12 @@ export async function runCompanyScan(
   const raw = await collectCompanyScan(options, deps);
   await scoreCompanyScan(
     raw,
-    { leadExporter: deps.leadExporter },
-    emailVerificationOverrides,
+    {
+      leadExporter: deps.leadExporter,
+      emailVerifier: deps.emailVerifier,
+      emailVerificationRepository: deps.emailVerificationRepository,
+      emailPatternRepository: deps.emailPatternRepository,
+      idGenerator: deps.idGenerator,
+    },
   );
 }
