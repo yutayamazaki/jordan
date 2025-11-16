@@ -51,7 +51,6 @@ export type CompanyScanRawData = {
   department: string;
   patternDecision: EmailPatternDecisionResult;
   contacts: ContactResponse[];
-  candidates: ContactAndEmailCandidates[];
 };
 
 export interface CompanyScanRawStore {
@@ -112,17 +111,12 @@ export async function collectCompanyScan(
 
   console.log("\n👺 Convert names to alphabet ...");
 
-  // メールアドレス候補生成
-  const candidates = createContactAndEmailCandidates(contacts, company.domain, emailPattern);
-  console.log("Contact and Email Candidates:", JSON.stringify(candidates, null, 2));
-
   const raw: CompanyScanRawData = {
     companyId,
     company,
     department,
     patternDecision,
     contacts,
-    candidates,
   };
 
   await deps.rawStore.save(raw);
@@ -143,10 +137,19 @@ export async function scoreCompanyScan(
 ): Promise<void> {
   console.log("\n👺 Convert to DB table records ...");
 
+  console.log("\n👺 Generate email candidates from contacts ...");
+
+  const candidates: ContactAndEmailCandidates[] =
+    createContactAndEmailCandidates(
+      raw.contacts,
+      raw.company.domain,
+      raw.patternDecision.pattern,
+    );
+
   console.log("\n👺 Verify email deliverability with EmailHippo ...");
 
   const allEmails = new Set<string>();
-  raw.candidates.forEach((candidate) => {
+  candidates.forEach((candidate) => {
     allEmails.add(candidate.primaryEmail.value);
     candidate.alternativeEmails.forEach((alt) => allEmails.add(alt.value));
   });
@@ -191,7 +194,7 @@ export async function scoreCompanyScan(
     raw.companyId,
     raw.company,
     raw.contacts,
-    raw.candidates,
+    candidates,
     raw.patternDecision.pattern,
     emailVerificationMap,
   );

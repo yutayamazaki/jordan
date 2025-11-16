@@ -26,8 +26,7 @@ B2B 企業の担当者情報を Web 検索＋LLM（OpenAI Structured Outputs）�
     - LLM（`LlmEmailPatternDetector`）によるドメインごとのパターン推定
     - 過去の学習パターン（`email_patterns` テーブル）を優先的に使用
   - Web 検索＋LLM による担当者候補取得（`LlmContactFinder`）
-  - 担当者情報からメール候補生成（`createContactAndEmailCandidates`）
-  - 上記の「生データ」を `CompanyScanRawData` として JSON 化
+  - 担当者情報などの「生データ」を `CompanyScanRawData` として JSON 化（メール候補はまだ生成しない）
   - JSON を `company_scans` テーブルに保存（`SqliteCompanyScanRawStore`）
 
 collect フェーズは、「あとから再スコアリング可能な生データ」を蓄積する役割です。
@@ -37,6 +36,7 @@ collect フェーズは、「あとから再スコアリング可能な生デー
 - 実装: `scoreCompanyScan` / `scoreCompanyScanFromStored`（`src/application/runCompanyScan.ts`）
 - 主な処理:
   - `company_scans` から `CompanyScanRawData` を読み込み
+  - 担当者情報からメール候補生成（`createContactAndEmailCandidates`）
   - EmailHippo API（`EmailHippoApiEmailVerifier`）でメールアドレスを検証
   - 検証結果は `email_verifications` テーブルにキャッシュ
   - 検証結果をもとに各メール候補の confidence を補正
@@ -203,11 +203,14 @@ npm run collect -- ./inputs/companies.csv
 ### 2. score フェーズだけ実行
 
 ```bash
-npm run score -- ./inputs/companies.csv
+npm run score
 ```
 
 - 事前に collect フェーズで `company_scans` に保存された生データを前提とします。
-- 各企業のメール候補に対して EmailHippo 検証を行い、結果を
+- `company_scans` に保存されている各企業・部署のうち、最新のスキャンについて
+  - primary かつ `isDeliverable = true` で、confidence が一定以上（例: 0.8 以上）のメール候補が存在しないものだけを自動で選択し、
+  - それらに対して EmailHippo 検証・スコアリングを実行します。
+- 検証結果は
   - `email_verifications`
   - `email_candidates`
   - `email_patterns`
