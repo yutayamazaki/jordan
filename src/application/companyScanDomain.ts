@@ -134,6 +134,15 @@ export function adjustEmailConfidence(
 ): number {
   if (!verification) return baseConfidence;
 
+  if (verification.source === "email_hippo") {
+    if (verification.isDeliverable === true) {
+      return 1;
+    }
+    if (verification.isDeliverable === false) {
+      return Math.min(baseConfidence, 0.1);
+    }
+  }
+
   let adjusted = baseConfidence;
   if (verification.hasMxRecords) {
     adjusted = Math.min(1, adjusted + 0.1);

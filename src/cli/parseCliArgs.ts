@@ -4,6 +4,7 @@ export type CsvCliOptions = {
   csvPath: string;
   debug: boolean;
   phase: ScanPhase;
+  emailVerificationCsvPath?: string;
 };
 
 export type CliOptions = CsvCliOptions;
@@ -25,6 +26,13 @@ export function parseCliArgs(): CliOptions {
     );
   })();
 
+  const emailVerificationsArg = args.find((arg) =>
+    arg.startsWith("--email-verifications-csv="),
+  );
+  const emailVerificationCsvPath = emailVerificationsArg
+    ? emailVerificationsArg.split("=")[1]
+    : undefined;
+
   // CSV モード: 1 つの位置引数（CSV パス）のみ
   if (positional.length === 1) {
     const [csvPath] = positional;
@@ -32,6 +40,7 @@ export function parseCliArgs(): CliOptions {
       csvPath,
       debug,
       phase,
+      emailVerificationCsvPath,
     };
   }
 

@@ -79,6 +79,11 @@ export class FileEmailVerificationRepository
       isDeliverable: record.isDeliverable,
       hasMxRecords: record.hasMxRecords,
       reason: record.reason,
+       source: record.source ?? "dns_mx",
+       status: record.status,
+       additionalStatusInfo: record.additionalStatusInfo,
+       domainCountryCode: record.domainCountryCode,
+       mailServerCountryCode: record.mailServerCountryCode,
     };
   }
 
@@ -95,6 +100,11 @@ export class FileEmailVerificationRepository
         hasMxRecords: result.hasMxRecords,
         reason: result.reason,
         verifiedAt: nowIso,
+        source: result.source,
+        status: result.status,
+        additionalStatusInfo: result.additionalStatusInfo,
+        domainCountryCode: result.domainCountryCode,
+        mailServerCountryCode: result.mailServerCountryCode,
       },
     );
 
@@ -102,4 +112,3 @@ export class FileEmailVerificationRepository
     saveCache(next);
   }
 }
-

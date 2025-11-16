@@ -7,11 +7,22 @@ import {
 } from "../domain";
 import { ContactResponse } from "../domain/entities/contact";
 
+export type EmailVerificationSource = "dns_mx" | "email_hippo";
+
 export type EmailVerificationResult = {
   email: string;
   isDeliverable: boolean;
   hasMxRecords: boolean;
   reason?: string;
+
+  // 検証ソース（DNS/MX or EmailHippo）
+  source: EmailVerificationSource;
+
+  // EmailHippo CSV の列（DNS/MX の場合は undefined）
+  status?: string; // Status
+  additionalStatusInfo?: string; // AdditionalStatusInfo
+  domainCountryCode?: string; // DomainCountryCode
+  mailServerCountryCode?: string; // MailServerCountryCode
 };
 
 export interface EmailPatternDetector {

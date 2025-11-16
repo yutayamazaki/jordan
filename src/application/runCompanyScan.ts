@@ -156,12 +156,19 @@ export async function collectCompanyScan(
 export async function scoreCompanyScan(
   raw: CompanyScanRawData,
   deps: Pick<RunCompanyScanDependencies, "leadExporter">,
+  emailVerificationOverrides?: Map<string, EmailVerificationResult>,
 ): Promise<void> {
   console.log("\n👺 Convert to DB table records ...");
 
   const emailVerificationMap = new Map<string, EmailVerificationResult>(
     raw.emailVerificationResults.map((result) => [result.email, result]),
   );
+
+  if (emailVerificationOverrides) {
+    for (const [email, override] of emailVerificationOverrides) {
+      emailVerificationMap.set(email, override);
+    }
+  }
 
   const {
     companyRecords,
@@ -191,6 +198,7 @@ export async function scoreCompanyScanFromStored(
     rawStore: CompanyScanRawStore;
     leadExporter: LeadExporter;
   },
+  emailVerificationOverrides?: Map<string, EmailVerificationResult>,
 ): Promise<void> {
   const { company, department } = options;
 
@@ -206,13 +214,18 @@ export async function scoreCompanyScanFromStored(
     return;
   }
 
-  await scoreCompanyScan(raw, { leadExporter: deps.leadExporter });
+  await scoreCompanyScan(
+    raw,
+    { leadExporter: deps.leadExporter },
+    emailVerificationOverrides,
+  );
 }
 
 export async function runCompanyScan(
   options: CompanyScanOptions,
   deps: RunCompanyScanWithStoreDependencies,
   phase: CompanyScanPhase = "all",
+  emailVerificationOverrides?: Map<string, EmailVerificationResult>,
 ): Promise<void> {
   if (phase === "collect") {
     await collectCompanyScan(options, deps);
@@ -220,13 +233,21 @@ export async function runCompanyScan(
   }
 
   if (phase === "score") {
-    await scoreCompanyScanFromStored(options, {
-      rawStore: deps.rawStore,
-      leadExporter: deps.leadExporter,
-    });
+    await scoreCompanyScanFromStored(
+      options,
+      {
+        rawStore: deps.rawStore,
+        leadExporter: deps.leadExporter,
+      },
+      emailVerificationOverrides,
+    );
     return;
   }
 
   const raw = await collectCompanyScan(options, deps);
-  await scoreCompanyScan(raw, { leadExporter: deps.leadExporter });
+  await scoreCompanyScan(
+    raw,
+    { leadExporter: deps.leadExporter },
+    emailVerificationOverrides,
+  );
 }

@@ -60,6 +60,11 @@ export const EmailVerificationRecordSchema = z.object({
   hasMxRecords: z.boolean(),
   reason: z.string().optional(),
   verifiedAt: z.string().datetime(),
+  source: z.enum(["dns_mx", "email_hippo"]).optional(),
+  status: z.string().optional(),
+  additionalStatusInfo: z.string().optional(),
+  domainCountryCode: z.string().optional(),
+  mailServerCountryCode: z.string().optional(),
 });
 
 export type EmailVerificationRecord = z.infer<typeof EmailVerificationRecordSchema>;

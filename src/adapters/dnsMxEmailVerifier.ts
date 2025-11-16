@@ -12,6 +12,7 @@ export class DnsMxEmailVerifier implements EmailVerifier {
         isDeliverable: false,
         hasMxRecords: false,
         reason: "Invalid email format",
+        source: "dns_mx",
       };
     }
 
@@ -26,6 +27,7 @@ export class DnsMxEmailVerifier implements EmailVerifier {
         reason: hasMxRecords
           ? "MX records found for domain"
           : "No MX records found for domain",
+        source: "dns_mx",
       };
     } catch (error) {
       return {
@@ -36,8 +38,8 @@ export class DnsMxEmailVerifier implements EmailVerifier {
           error instanceof Error
             ? `MX lookup failed: ${error.message}`
             : "MX lookup failed",
+        source: "dns_mx",
       };
     }
   }
 }
-

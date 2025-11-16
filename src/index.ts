@@ -9,6 +9,7 @@ import { UuidGenerator } from "./infrastructure/idGenerator";
 import { DnsMxEmailVerifier } from "./adapters/dnsMxEmailVerifier";
 import { FileEmailVerificationRepository } from "./infrastructure/emailVerificationRepository";
 import { FileCompanyScanRawStore } from "./infrastructure/companyScanRawStore";
+import { loadEmailHippoCsv } from "./infrastructure/emailHippoCsvLoader";
 
 async function main() {
   try {
@@ -20,6 +21,18 @@ async function main() {
     const emailVerifier = new DnsMxEmailVerifier();
     const emailVerificationRepository = new FileEmailVerificationRepository();
     const rawStore = new FileCompanyScanRawStore();
+
+    let emailVerificationOverrides:
+      | Map<string, import("./application/ports").EmailVerificationResult>
+      | undefined;
+    if (options.emailVerificationCsvPath) {
+      console.log(
+        `\n👺 Load EmailHippo verification CSV: ${options.emailVerificationCsvPath} ...`,
+      );
+      emailVerificationOverrides = loadEmailHippoCsv(
+        options.emailVerificationCsvPath,
+      );
+    }
 
     const companies = loadCompaniesFromCsv(options.csvPath);
 
@@ -49,6 +62,7 @@ async function main() {
           rawStore,
         },
         options.phase,
+        emailVerificationOverrides,
       );
     }
   } catch (error) {

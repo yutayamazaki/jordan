@@ -5,7 +5,7 @@ B2B 企業の担当者情報を Web 検索＋LLM（OpenAI Structured Outputs）�
 
 ---
 
-## 機能概要
+## 機能概要・全体設計
 
 - 会社名・ドメイン名・ターゲット部署を入力すると、  
   - Web 検索結果から担当者候補（氏名／役職／部署）を抽出
@@ -13,36 +13,26 @@ B2B 企業の担当者情報を Web 検索＋LLM（OpenAI Structured Outputs）�
 - 会社ドメインから、実際に公開されているメールアドレス例をもとに  
   - 一般的なメールアドレス構成パターン（例: `first.last`, `f_last` など）を推定
 - 担当者情報とメールパターンから、複数のメールアドレス候補を生成
+- 候補メールアドレスに対して、DNS MX レコードによる deliverability チェックを実施
+- さらに、EmailHippo などで手動検証した結果を CSV から読み込み、スコアリングに統合
 - 上記の情報を CSV（疑似 DB テーブル形式）として `outputs/` 以下に保存
 
----
+### アーキテクチャ概要
 
-## ディレクトリ構成
-
-- `src/index.ts`
-  - メイン処理エントリーポイント
-  - 処理フロー:
-    1. 対象会社情報・部署・デバッグフラグの設定
-    2. メールドメインからメールパターン推定（`detectEmailPattern`）
-    3. Web 検索による担当者情報収集（`searchContacts`）
-    4. 担当者ごとのメールアドレス候補生成（`generateEmailCandidates`）
-    5. DB テーブル相当のレコードに変換
-    6. `outputs/<domain>/` 以下に CSV 出力（`saveAsCsvFiles`）
-- `src/adapters/openai.ts`
-  - OpenAI SDK ラッパー
-  - `createStructuredOutputsCompletions`
-    - `chat.completions.parse`（`gpt-4o-search-preview`）を利用
-    - `web_search` オプションを使った Web 検索 ＋ Structured Outputs
-  - `createStructuredOutputs`
-    - `responses.parse`（`gpt-5-mini-2025-08-07`）を利用
-    - `zod` スキーマに基づいたパースを行い、`neverthrow` で `Result` 型を返却
-- `src/domain/index.ts`
-  - CSV 出力用の「DB テーブル」スキーマ定義（`zod`）
-    - `CompanySchema` / `ContactSchema` / `EmailCandidateSchema` / `EmailPatternRecordSchema`
-- `src/domain/entities/company.ts`
-  - アプリケーション内で利用する会社エンティティ `Company`
-- `src/domain/entities/contact.ts`
-  - Web 検索で取得する担当者情報のスキーマ（`ContactResponseSchema`／`ContactListResponseSchema`）
+- 2 フェーズ構成
+  - **collect フェーズ**（`collectCompanyScan`）
+    - メールパターン推定
+    - Web 検索による担当者情報取得
+    - メール候補生成
+    - DNS MX によるメール検証
+    - 以上の「生データ」を JSON として `outputs/company_scans/` に保存
+  - **score フェーズ**（`scoreCompanyScan`）
+    - 保存済みの生データを読み込み
+    - EmailHippo CSV（任意）と DNS 検証結果を統合したスコアリング
+    - 「疑似 DB テーブル」形式の CSV を `outputs/` に出力
+- メール検証キャッシュ
+  - `outputs/email_verifications.json` に検証結果を保存
+  - 一定期間（デフォルト 90 日）以内の結果は再利用し、DNS への問い合わせ回数を削減
 
 ---
 
@@ -93,7 +83,7 @@ OPENAI_API_KEY=your-openai-api-key
 #### 企業リスト CSV を指定して実行
 
 ```bash
-npm run dev -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all]
+npm run dev -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all] [--email-verifications-csv=<EmailHippo CSVパス>]
 ```
 
 CSV の例（ヘッダー必須）:
@@ -116,6 +106,9 @@ name,domain,department
     - `collect`: 情報収集（Web 検索・メールパターン推定・担当者候補抽出・メール検証）だけ実行し、生データを保存します
     - `score`: 既に保存されている生データから CSV 出力だけ行います（新規の Web 検索やメール検証は行いません）
     - `all`: `collect` と `score` を連続実行します（明示しない場合のデフォルト）
+  - `--email-verifications-csv=<path>`:
+    - EmailHippo などで手動検証したメールアドレスの CSV を指定
+    - `score` フェーズで DNS 検証結果より優先してスコアリングに利用されます
 
 ### ビルド＆実行
 
@@ -124,7 +117,7 @@ name,domain,department
 npm run build
 
 # ビルド済み JavaScript を実行（企業リスト CSV）
-npm start -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all]
+npm start -- "<企業リストCSVパス>" [--debug] [--phase=collect|score|all] [--email-verifications-csv=<EmailHippo CSVパス>]
 ```
 
 `--phase` オプションの意味:
@@ -150,7 +143,8 @@ npm run dev -- "./companies.csv"
 npm run dev -- "./companies.csv" --phase=collect
 
 # 後から score だけ実行（Web 検索やメール検証は再実行しない）
-npm run dev -- "./companies.csv" --phase=score
+# EmailHippo 検証結果（任意）がある場合は同時に指定
+npm run dev -- "./companies.csv" --phase=score --email-verifications-csv="./emailhippo.csv"
 ```
 
 `collect` による生データは、各行の `domain` と `department` の組み合わせごとに  
@@ -165,16 +159,19 @@ npm run dev -- "./companies.csv" --phase=score
 
 - 出力先ディレクトリ: `outputs/`
 
-生成されるファイル:
+生成されるファイル（いずれも複数社分を追記していきます）:
 
 - 会社テーブル: `outputs/companies.csv`
   - カラム: `ID`, `Name`, `Domain`
 - 担当者テーブル: `outputs/contacts.csv`
   - カラム: `ID`, `Company ID`, `Name`, `Position`, `Department`, `First Name`, `Last Name`
 - メールアドレス候補テーブル: `outputs/email_candidates.csv`
-  - カラム: `ID`, `Contact ID`, `Email`, `Is Primary`, `Confidence`, `Type`, `Pattern`
+  - カラム: `ID`, `Contact ID`, `Email`, `Is Primary`, `Confidence`, `Type`, `Pattern`, `Is Deliverable`, `Has MX Records`, `Verification Reason`
 - メールパターンテーブル: `outputs/email_patterns.csv`
   - カラム: `ID`, `Company ID`, `Pattern`, `Reason`
+
+内部的には、メール検証結果は `EmailVerificationRecordSchema` に従って  
+`outputs/email_verifications.json` にキャッシュされます（CSV には直接出力されません）。
 
 ---
 
@@ -187,13 +184,25 @@ npm run dev -- "./companies.csv" --phase=score
   - `firstName`, `lastName`, `domain` と推定パターンをもとに、複数のメール候補を生成
   - 推定されたパターンがある場合は、そのパターンに合致する候補を優先的に先頭に並べる
 
+## メール検証とスコアリングロジック
+
+- DNS MX 検証（`DnsMxEmailVerifier`）
+  - ドメインの MX レコードを引き、存在すれば `hasMxRecords = true` として `isDeliverable` を真寄りに評価
+- EmailHippo の手動検証結果（`emailHippoCsvLoader`）
+  - `CheckedEmailAddress`, `Status`, `AdditionalStatusInfo` などの列を読み込み
+  - `Status === "Ok"` の場合は高いスコア、`Bad` などの場合は低いスコアとして扱う
+- スコア統合（`adjustEmailConfidence`）
+  - EmailHippo の結果があるメールアドレスはそちらを優先
+    - OK の場合は confidence を最低 0.9 まで引き上げ
+    - NG の場合は最大 0.1 まで下げる
+  - EmailHippo 結果がない場合は、DNS/MX の有無に応じて confidence を微調整
+
 ---
 
 ## 注意事項
 
 - OpenAI API と Web 検索を利用するため、実行時に API 利用料金が発生します。
 - Web 上の情報に依存するため、取得される担当者情報は不完全・誤りを含む可能性があります。
-- 現状、API キーがコードに直書きされているため、リポジトリを公開する場合は必ず環境変数管理＋キーのローテーションを行ってください。
 
 ---
 
