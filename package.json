@@ -5,7 +5,11 @@
   "scripts": {
     "build": "tsc",
     "collect": "ts-node src/collect.ts",
-    "score": "ts-node src/score.ts"
+    "score": "ts-node src/score.ts",
+    "show-domain": "ts-node src/showDomain.ts",
+    "test": "vitest run",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +19,13 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/dotenv": "^8.2.0",
     "@types/node": "^24.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
+    "@vitest/eslint-plugin": "^1.4.2",
+    "eslint": "^9.39.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.0"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

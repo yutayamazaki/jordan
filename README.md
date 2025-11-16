@@ -213,6 +213,21 @@ npm run score -- ./inputs/companies.csv
   - `email_patterns`
   などのテーブルに反映します。
 
+### 3. 既存結果の検索（show-domain）
+
+collect / score 済みの結果を、ドメインから CLI で検索できます。
+
+```bash
+# ドメインで検索
+npm run show-domain -- --domain example.com
+```
+
+- `companies` テーブルから該当企業を検索し、企業ごとに
+  - `[Email Patterns]` として `email_patterns` のパターン・成功件数・サンプルアドレスなど
+  - `[Contacts and Email Candidates]` として `contacts` と `email_candidates` を紐付けた一覧
+  を標準出力に表示します。
+- メール候補は primary / alt、confidence、pattern、deliverable（yes/no/unknown）などが分かる形式で表示されます。
+
 ## 出力・データ構造
 
 - SQLite DB: `data/jordan.sqlite`
