@@ -1,7 +1,8 @@
 # Jordan
 
 B2B 企業の担当者情報を Web 検索＋LLM（OpenAI Structured Outputs）で収集し、  
-メールアドレスのパターン推定・候補生成・EmailHippo による検証結果を SQLite に保存する CLI ツールです。
+メールアドレスのパターン推定・候補生成・EmailHippo による検証結果を SQLite に保存する CLI ツールです。  
+加えて、収集したリード情報をブラウザから閲覧・検索するための Next.js 製 Web ダッシュボード（`web/` 配下）も含まれます。
 
 ## 機能概要
 
@@ -156,15 +157,22 @@ DB に保存するレコード形式を `zod` で定義しています。
 - `src/infrastructure/idGenerator.ts`
   - UUID ベースの ID 生成
 
+- `web/`
+  - Next.js 製の社内向け Web ダッシュボード
+  - `web/lib/db.ts` から `../data/jordan.sqlite` を参照し、CLI が保存した `companies` / `contacts` / `email_candidates` などを読み取ります
+
 ## セットアップ
 
 ### 前提
 
 - Node.js（推奨: 18 以降）
+- Web ダッシュボードを利用する場合も同様に Node.js 18 以降を推奨
 
 ### インストール
 
 ```bash
+npm install
+cd web
 npm install
 ```
 
@@ -187,6 +195,8 @@ COLLECT_CONCURRENCY=5
 ```
 
 ## 使い方
+
+CLI と Web ダッシュボードそれぞれの使い方を説明します。
 
 ### ビルド
 
@@ -223,7 +233,19 @@ npm run score
   - `email_patterns`
   などのテーブルに反映します。
 
-### 3. 既存結果の検索（show-domain）
+### 3. 会社 Web サイト・ファビコン URL の推定（任意）
+
+Web ダッシュボードで会社のロゴやサイトへのリンクを表示するために、`companies.website_url` / `companies.favicon_url` を自動推定できます。
+
+```bash
+npm run guess-website
+```
+
+- `companies` テーブルに `website_url` / `favicon_url` カラムが存在しない場合は自動で追加します。
+- 各会社のドメインから `https://example.com` や `https://www.example.com` などを HEAD リクエストで試し、応答がある URL を `website_url` として保存します。
+- `website_url` をもとに、`/favicon.ico` など代表的なパスを試して `favicon_url` を保存します。
+
+### 4. 既存結果の検索（show-domain）
 
 collect / score 済みの結果を、ドメインから CLI で検索できます。
 
@@ -249,6 +271,33 @@ npm run show-domain -- --domain example.com
   - `company_scans` … collect フェーズでの生データ JSON
 
 必要に応じて、この DB から CSV をエクスポートして既存の CRM / MA ツールにインポートできます。
+
+## Web ダッシュボードの使い方
+
+CLI で `companies` / `contacts` / `email_candidates` などのテーブルがある程度埋まった状態で利用することを想定しています。
+
+### 起動手順
+
+```bash
+cd web
+npm run dev
+```
+
+- デフォルトでは `http://localhost:3000` で起動します。
+- `web/lib/db.ts` に記載の通り、アプリケーションルート（`web/`）から見て `../data/jordan.sqlite` を開きます。
+  - そのため、CLI から生成した SQLite ファイルをリポジトリ直下の `data/jordan.sqlite` に配置しておく必要があります。
+
+### 画面構成
+
+- `/` … トップページ。Jordan のリードインテリジェンス概要と、各一覧ページへの導線を表示。
+- `/companies` … 会社一覧。ドメイン・会社名などでフィルタし、優先すべきターゲット企業を確認できます。
+- `/contacts` … 担当者一覧。`contacts` と `email_candidates` テーブルをもとに、deliverable なメールアドレスを含む担当者を検索できます。
+- `/contacts/[id]` … 担当者詳細。1 人の担当者に紐づく送信候補メールアドレス（deliverable のものを優先）を表示します。
+
+### 注意事項
+
+- Web ダッシュボードはあくまで内部メンバー向けの閲覧 UI であり、DB への書き込みは行わず、`data/jordan.sqlite` の読み取りのみを行います。
+- DB の更新（collect / score / guess-website など）はすべて CLI から行われる前提です。
 
 ## 注意事項
 
