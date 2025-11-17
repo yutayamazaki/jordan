@@ -28,7 +28,9 @@ function initSchema(db: any): void {
     CREATE TABLE IF NOT EXISTS companies (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      domain TEXT NOT NULL
+      domain TEXT NOT NULL,
+      website_url TEXT,
+      favicon_url TEXT
     );
 
     CREATE TABLE IF NOT EXISTS contacts (

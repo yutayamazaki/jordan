@@ -7,6 +7,7 @@
     "collect": "ts-node src/collect.ts",
     "score": "ts-node src/score.ts",
     "show-domain": "ts-node src/showDomain.ts",
+    "guess-website": "ts-node src/guessWebsiteUrl.ts",
     "test": "vitest run",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix"
