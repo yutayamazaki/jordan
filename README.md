@@ -180,6 +180,12 @@ EMAIL_HIPPO_API_KEY=your_email_hippo_key
 
 SQLite の DB パスはデフォルトで `data/jordan.sqlite` が使われます（`getDb()` の引数で上書き可能）。
 
+collect フェーズの並列実行数は、以下の環境変数で制御できます（デフォルト: 5）。
+
+```bash
+COLLECT_CONCURRENCY=5
+```
+
 ## 使い方
 
 ### ビルド
