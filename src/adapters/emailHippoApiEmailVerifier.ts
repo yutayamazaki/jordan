@@ -114,7 +114,6 @@ export class EmailHippoApiEmailVerifier implements EmailVerifier {
         source: "email_hippo",
       };
     }
-    console.log("EmailHippo API response:", data);
 
     const metaEmail = data.meta?.email;
 

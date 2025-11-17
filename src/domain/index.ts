@@ -81,7 +81,7 @@ export const EmailVerificationRecordSchema = z.object({
   overallRiskScore: z.number().optional(),
   hippoTrustScore: z.number().optional(),
   hippoTrustLevel: z.string().optional(),
-  mailServerLocation: z.string().optional(),
+  mailServerLocation: z.string().nullable().optional(),
   mailServiceTypeId: z.string().optional(),
   status: z.string().optional(),
   additionalStatusInfo: z.string().optional(),

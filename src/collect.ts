@@ -9,6 +9,8 @@ async function main() {
     const options = parseCliArgs("collect");
     const deps = createRunCompanyScanDeps();
 
+    const onExists = options.onExists ?? "skip";
+
     const companies = loadCompaniesFromCsv(options.csvPath);
 
     if (companies.length === 0) {
@@ -17,6 +19,15 @@ async function main() {
     }
 
     for (const { company, department } of companies) {
+      const existing = await deps.rawStore.load(company.domain, department);
+
+      if (existing && onExists === "skip") {
+        console.log(
+          `\n==============================\n[COLLECT] Skipped company: ${company.name} (${company.domain}) / Department: ${department} (existing scan found)\n==============================`,
+        );
+        continue;
+      }
+
       console.log(
         `\n==============================\n[COLLECT] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n==============================`,
       );

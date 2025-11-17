@@ -95,7 +95,7 @@ export class SqliteEmailVerificationRepository implements EmailVerificationRepos
       overallRiskScore: record.overallRiskScore,
       hippoTrustScore: record.hippoTrustScore,
       hippoTrustLevel: record.hippoTrustLevel,
-      mailServerLocation: record.mailServerLocation,
+      mailServerLocation: record.mailServerLocation ?? undefined,
       mailServiceTypeId: record.mailServiceTypeId,
       status: record.status,
       additionalStatusInfo: record.additionalStatusInfo,
@@ -252,4 +252,3 @@ export class SqliteEmailVerificationRepository implements EmailVerificationRepos
     });
   }
 }
-

@@ -199,6 +199,7 @@ npm run collect -- ./inputs/companies.csv
   - 担当者候補収集
   - メール候補生成
   が行われ、結果は `company_scans` テーブルに保存されます。
+- 既に同じドメイン × 部署の collect 結果が存在する場合はデフォルトでスキップされます。上書きしたい場合は `--on-exists=overwrite` を指定してください。
 
 ### 2. score フェーズだけ実行
 

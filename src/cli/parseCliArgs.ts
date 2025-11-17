@@ -1,9 +1,12 @@
 export type ScanPhase = "collect" | "score" | "all";
 
+export type OnExistsBehavior = "skip" | "overwrite";
+
 export type CsvCliOptions = {
   csvPath: string;
   phase: ScanPhase;
   emailVerificationCsvPath?: string;
+  onExists?: OnExistsBehavior;
 };
 
 export type CliOptions = CsvCliOptions;
@@ -24,6 +27,18 @@ export function parseCliArgs(defaultPhase: ScanPhase = "all"): CliOptions {
     );
   })();
 
+  const onExistsArg = args.find((arg) => arg.startsWith("--on-exists="));
+  const onExists: OnExistsBehavior | undefined = (() => {
+    if (!onExistsArg) return undefined;
+    const value = onExistsArg.split("=")[1];
+    if (value === "skip" || value === "overwrite") {
+      return value;
+    }
+    throw new Error(
+      "Invalid --on-exists option. Use one of: skip, overwrite",
+    );
+  })();
+
   const emailVerificationsArg = args.find((arg) =>
     arg.startsWith("--email-verifications-csv="),
   );
@@ -37,6 +52,7 @@ export function parseCliArgs(defaultPhase: ScanPhase = "all"): CliOptions {
     return {
       csvPath,
       phase,
+      onExists,
       emailVerificationCsvPath,
     };
   }
