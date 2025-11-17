@@ -66,20 +66,40 @@ export async function GET(request: Request) {
     "deliverableEmails"
   ];
 
+  const records: string[][] = [];
+
+  for (const c of contacts) {
+    const baseFields = [
+      c.id,
+      c.name,
+      c.position,
+      c.department,
+      c.companyName,
+      c.companyDomain
+    ] as const;
+
+    const emailsRaw = c.deliverableEmails;
+    const emails =
+      emailsRaw && emailsRaw.trim().length > 0
+        ? emailsRaw
+            .split(/\r?\n/)
+            .map((e) => e.trim())
+            .filter((e) => e.length > 0)
+        : [];
+
+    if (emails.length === 0) {
+      records.push([...baseFields, ""]);
+    } else {
+      for (const email of emails) {
+        records.push([...baseFields, email]);
+      }
+    }
+  }
+
   const lines = [
     header.map(escapeCsvValue).join(","),
-    ...contacts.map((c) =>
-      [
-        c.id,
-        c.name,
-        c.position,
-        c.department,
-        c.companyName,
-        c.companyDomain,
-        c.deliverableEmails
-      ]
-        .map((value) => escapeCsvValue(value))
-        .join(",")
+    ...records.map((record) =>
+      record.map((value) => escapeCsvValue(value)).join(",")
     )
   ];
 
