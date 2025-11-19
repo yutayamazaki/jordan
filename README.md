@@ -194,6 +194,40 @@ collect フェーズの並列実行数は、以下の環境変数で制御でき
 COLLECT_CONCURRENCY=5
 ```
 
+### ローカル開発（テスト・Lint）
+
+開発中の型チェックやテスト、Lint 用のスクリプトです。
+
+```bash
+# TypeScript ビルド（型エラー検出）
+npm run build
+
+# 単体テスト（Vitest）
+npm test
+
+# ESLint による静的解析
+npm run lint
+
+# ESLint + 自動修正
+npm run lint:fix
+```
+
+Web ダッシュボード配下には、Next.js 用のスクリプトがあります。
+
+```bash
+cd web
+
+# 開発サーバー
+npm run dev
+
+# 本番ビルド
+npm run build
+
+# Lint / 型チェック
+npm run lint
+npm run typecheck
+```
+
 ## 使い方
 
 CLI と Web ダッシュボードそれぞれの使い方を説明します。
