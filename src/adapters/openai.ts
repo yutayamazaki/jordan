@@ -33,7 +33,7 @@ export async function createStructuredOutputs<T extends ZodType>(
       input: prompt,
       tools: useWebSearch ? ([{ type: "web_search" }] as any) : undefined,
       text: { format: zodTextFormat(schema, "structured") },
-      reasoning: { effort: "medium" },
+      reasoning: { effort: "low" },
     });
     const parsed = response.output_parsed as z.infer<T> | null;
     if (!parsed) {
