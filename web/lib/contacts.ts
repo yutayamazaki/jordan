@@ -10,6 +10,8 @@ export type ContactListItem = {
   companyWebsiteUrl: string | null;
   companyFaviconUrl: string | null;
   deliverableEmails: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export type EmailCandidateListItem = {
@@ -37,6 +39,8 @@ export type ContactDetail = {
     companyDomain: string;
     companyWebsiteUrl: string | null;
     companyFaviconUrl: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
   };
   emailCandidates: EmailCandidateListItem[];
 };
@@ -46,7 +50,9 @@ export type ContactSortField =
   | "companyDomain"
   | "name"
   | "position"
-  | "department";
+  | "department"
+  | "createdAt"
+  | "updatedAt";
 
 export type SortDirection = "asc" | "desc";
 
@@ -78,6 +84,12 @@ export function listContacts(
       break;
     case "department":
       orderByColumn = "c.department";
+      break;
+    case "createdAt":
+      orderByColumn = "c.created_at";
+      break;
+    case "updatedAt":
+      orderByColumn = "c.updated_at";
       break;
     default:
       orderByColumn = "co.domain";
@@ -113,7 +125,9 @@ export function listContacts(
       co.domain AS companyDomain,
       co.website_url AS companyWebsiteUrl,
       co.favicon_url AS companyFaviconUrl,
-      ec.deliverableEmails AS deliverableEmails
+      ec.deliverableEmails AS deliverableEmails,
+      c.created_at AS createdAt,
+      c.updated_at AS updatedAt
     FROM contacts c
     JOIN companies co ON c.company_id = co.id
     LEFT JOIN (
@@ -159,6 +173,12 @@ export function listAllContacts(
     case "department":
       orderByColumn = "c.department";
       break;
+    case "createdAt":
+      orderByColumn = "c.created_at";
+      break;
+    case "updatedAt":
+      orderByColumn = "c.updated_at";
+      break;
     default:
       orderByColumn = "co.domain";
   }
@@ -193,7 +213,9 @@ export function listAllContacts(
       co.domain AS companyDomain,
       co.website_url AS companyWebsiteUrl,
       co.favicon_url AS companyFaviconUrl,
-      ec.deliverableEmails AS deliverableEmails
+      ec.deliverableEmails AS deliverableEmails,
+      c.created_at AS createdAt,
+      c.updated_at AS updatedAt
     FROM contacts c
     JOIN companies co ON c.company_id = co.id
     LEFT JOIN (
@@ -270,7 +292,9 @@ export function getContactDetail(contactId: string): ContactDetail | null {
       co.name AS companyName,
       co.domain AS companyDomain,
       co.website_url AS companyWebsiteUrl,
-      co.favicon_url AS companyFaviconUrl
+      co.favicon_url AS companyFaviconUrl,
+      c.created_at AS createdAt,
+      c.updated_at AS updatedAt
     FROM contacts c
     JOIN companies co ON c.company_id = co.id
     WHERE c.id = ?

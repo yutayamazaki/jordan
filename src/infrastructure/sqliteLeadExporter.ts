@@ -17,12 +17,15 @@ export class SqliteLeadExporter implements LeadExporter {
   ): Promise<void> {
     const db = getDb();
 
+    const nowIso = new Date().toISOString();
+
     const insertCompany = db.prepare(`
-      INSERT INTO companies (id, name, domain)
-      VALUES (@id, @name, @domain)
+      INSERT INTO companies (id, name, domain, created_at, updated_at)
+      VALUES (@id, @name, @domain, @created_at, @updated_at)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
-        domain = excluded.domain
+        domain = excluded.domain,
+        updated_at = excluded.updated_at
     `);
 
     const insertContact = db.prepare(`
@@ -34,7 +37,9 @@ export class SqliteLeadExporter implements LeadExporter {
         department,
         department_category,
         first_name,
-        last_name
+        last_name,
+        created_at,
+        updated_at
       )
       VALUES (
         @id,
@@ -44,7 +49,9 @@ export class SqliteLeadExporter implements LeadExporter {
         @department,
         @department_category,
         @first_name,
-        @last_name
+        @last_name,
+        @created_at,
+        @updated_at
       )
       ON CONFLICT(id) DO UPDATE SET
         company_id = excluded.company_id,
@@ -53,7 +60,8 @@ export class SqliteLeadExporter implements LeadExporter {
         department = excluded.department,
         department_category = excluded.department_category,
         first_name = excluded.first_name,
-        last_name = excluded.last_name
+        last_name = excluded.last_name,
+        updated_at = excluded.updated_at
     `);
 
     const insertEmailCandidate = db.prepare(`
@@ -67,7 +75,9 @@ export class SqliteLeadExporter implements LeadExporter {
         pattern,
         is_deliverable,
         has_mx_records,
-        verification_reason
+        verification_reason,
+        created_at,
+        updated_at
       )
       VALUES (
         @id,
@@ -79,7 +89,9 @@ export class SqliteLeadExporter implements LeadExporter {
         @pattern,
         @is_deliverable,
         @has_mx_records,
-        @verification_reason
+        @verification_reason,
+        @created_at,
+        @updated_at
       )
       ON CONFLICT(id) DO UPDATE SET
         contact_id = excluded.contact_id,
@@ -90,7 +102,8 @@ export class SqliteLeadExporter implements LeadExporter {
         pattern = excluded.pattern,
         is_deliverable = excluded.is_deliverable,
         has_mx_records = excluded.has_mx_records,
-        verification_reason = excluded.verification_reason
+        verification_reason = excluded.verification_reason,
+        updated_at = excluded.updated_at
     `);
 
     const insertEmailPattern = db.prepare(`
@@ -104,7 +117,9 @@ export class SqliteLeadExporter implements LeadExporter {
         sample_email,
         verified_at,
         success_count,
-        total_count
+        total_count,
+        created_at,
+        updated_at
       )
       VALUES (
         @id,
@@ -116,7 +131,9 @@ export class SqliteLeadExporter implements LeadExporter {
         @sample_email,
         @verified_at,
         @success_count,
-        @total_count
+        @total_count,
+        @created_at,
+        @updated_at
       )
       ON CONFLICT(id) DO UPDATE SET
         company_id = excluded.company_id,
@@ -127,7 +144,8 @@ export class SqliteLeadExporter implements LeadExporter {
         sample_email = excluded.sample_email,
         verified_at = excluded.verified_at,
         success_count = excluded.success_count,
-        total_count = excluded.total_count
+        total_count = excluded.total_count,
+        updated_at = excluded.updated_at
     `);
 
     const tx = db.transaction(() => {
@@ -136,6 +154,8 @@ export class SqliteLeadExporter implements LeadExporter {
           id: company.id,
           name: company.name,
           domain: company.domain,
+          created_at: nowIso,
+          updated_at: nowIso,
         });
       }
 
@@ -149,6 +169,8 @@ export class SqliteLeadExporter implements LeadExporter {
           department_category: contact.departmentCategory,
           first_name: contact.firstName,
           last_name: contact.lastName,
+          created_at: nowIso,
+          updated_at: nowIso,
         });
       }
 
@@ -174,6 +196,8 @@ export class SqliteLeadExporter implements LeadExporter {
                 : 0
               : null,
           verification_reason: candidate.verificationReason ?? null,
+          created_at: nowIso,
+          updated_at: nowIso,
         });
       }
 
@@ -191,6 +215,8 @@ export class SqliteLeadExporter implements LeadExporter {
             typeof pattern.successCount === "number" ? pattern.successCount : null,
           total_count:
             typeof pattern.totalCount === "number" ? pattern.totalCount : null,
+          created_at: nowIso,
+          updated_at: nowIso,
         });
       }
     });
@@ -198,4 +224,3 @@ export class SqliteLeadExporter implements LeadExporter {
     tx();
   }
 }
-

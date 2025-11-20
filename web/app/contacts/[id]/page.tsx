@@ -61,6 +61,22 @@ export default function ContactDetailPage({ params }: ContactDetailPageProps) {
               <dt className="w-24 shrink-0 text-slate-500">部署カテゴリ</dt>
               <dd>{contact.departmentCategory}</dd>
             </div>
+            <div className="flex gap-2">
+              <dt className="w-24 shrink-0 text-slate-500">作成日時</dt>
+              <dd className="text-xs text-slate-600">
+                {contact.createdAt
+                  ? new Date(contact.createdAt).toLocaleString("ja-JP")
+                  : "-"}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-24 shrink-0 text-slate-500">更新日時</dt>
+              <dd className="text-xs text-slate-600">
+                {contact.updatedAt
+                  ? new Date(contact.updatedAt).toLocaleString("ja-JP")
+                  : "-"}
+              </dd>
+            </div>
           </dl>
         </div>
 

@@ -109,7 +109,6 @@ async function searchContactsWithLLM(
   domain: string,
   department: string,
 ): Promise<ContactResponse[]> {
-  console.log("\n👺 Search Web to get contact info ...");
   const contactSearchPrompt = createContactSearchPrompt(name, domain, department);
   const result = await createStructuredOutputs(contactSearchPrompt, ContactListResponseSchema, {
     useWebSearch: true,

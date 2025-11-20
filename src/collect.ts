@@ -44,13 +44,13 @@ async function main() {
 
         if (existing && onExists === "skip") {
           console.log(
-            `\n==============================\n[COLLECT] Skipped company: ${company.name} (${company.domain}) / Department: ${department} (existing scan found)\n==============================`,
+            `\n[COLLECT] Skipped company: ${company.name} (${company.domain}) / Department: ${department} (existing scan found)\n`,
           );
           continue;
         }
 
         console.log(
-          `\n==============================\n[COLLECT] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n==============================`,
+          `\n[COLLECT] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n`,
         );
 
         await runCompanyScan(

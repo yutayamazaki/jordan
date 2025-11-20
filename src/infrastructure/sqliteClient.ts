@@ -30,7 +30,9 @@ function initSchema(db: any): void {
       name TEXT NOT NULL,
       domain TEXT NOT NULL,
       website_url TEXT,
-      favicon_url TEXT
+      favicon_url TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS contacts (
@@ -42,6 +44,8 @@ function initSchema(db: any): void {
       department_category TEXT NOT NULL,
       first_name TEXT NOT NULL,
       last_name TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (company_id) REFERENCES companies(id)
     );
 
@@ -56,6 +60,8 @@ function initSchema(db: any): void {
       is_deliverable INTEGER,
       has_mx_records INTEGER,
       verification_reason TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (contact_id) REFERENCES contacts(id)
     );
 
@@ -70,6 +76,8 @@ function initSchema(db: any): void {
       verified_at TEXT,
       success_count INTEGER,
       total_count INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (company_id) REFERENCES companies(id)
     );
 
@@ -100,7 +108,9 @@ function initSchema(db: any): void {
       additional_status_info TEXT,
       domain_country_code TEXT,
       mail_server_country_code TEXT,
-      raw_response_snippet TEXT
+      raw_response_snippet TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS company_scans (
@@ -111,7 +121,8 @@ function initSchema(db: any): void {
       department TEXT NOT NULL,
       debug INTEGER NOT NULL,
       raw_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS contact_search_caches (
@@ -120,7 +131,34 @@ function initSchema(db: any): void {
       department TEXT NOT NULL,
       company_name TEXT,
       contacts_json TEXT NOT NULL,
-      searched_at TEXT NOT NULL
+      searched_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // Add missing timestamp columns for existing databases (ignore errors if they already exist)
+  const alterStatements = [
+    "ALTER TABLE companies ADD COLUMN created_at TEXT",
+    "ALTER TABLE companies ADD COLUMN updated_at TEXT",
+    "ALTER TABLE contacts ADD COLUMN created_at TEXT",
+    "ALTER TABLE contacts ADD COLUMN updated_at TEXT",
+    "ALTER TABLE email_candidates ADD COLUMN created_at TEXT",
+    "ALTER TABLE email_candidates ADD COLUMN updated_at TEXT",
+    "ALTER TABLE email_patterns ADD COLUMN created_at TEXT",
+    "ALTER TABLE email_patterns ADD COLUMN updated_at TEXT",
+    "ALTER TABLE email_verifications ADD COLUMN created_at TEXT",
+    "ALTER TABLE email_verifications ADD COLUMN updated_at TEXT",
+    "ALTER TABLE company_scans ADD COLUMN updated_at TEXT",
+    "ALTER TABLE contact_search_caches ADD COLUMN created_at TEXT",
+    "ALTER TABLE contact_search_caches ADD COLUMN updated_at TEXT",
+  ];
+
+  for (const sql of alterStatements) {
+    try {
+      db.prepare(sql).run();
+    } catch {
+      // ignore if column already exists or table missing (older DBs)
+    }
+  }
 }

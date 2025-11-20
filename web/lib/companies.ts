@@ -7,6 +7,8 @@ export type CompanyListItem = {
   websiteUrl: string | null;
   faviconUrl: string | null;
   contactCount: number;
+  createdAt: string | null;
+  updatedAt: string | null;
 };
 
 export function listCompanies(
@@ -35,11 +37,13 @@ export function listCompanies(
       co.domain AS domain,
       co.website_url AS websiteUrl,
       co.favicon_url AS faviconUrl,
-      COUNT(c.id) AS contactCount
+      COUNT(c.id) AS contactCount,
+      co.created_at AS createdAt,
+      co.updated_at AS updatedAt
     FROM companies co
     LEFT JOIN contacts c ON c.company_id = co.id
     ${whereSql}
-    GROUP BY co.id, co.name, co.domain, co.website_url, co.favicon_url
+    GROUP BY co.id, co.name, co.domain, co.website_url, co.favicon_url, co.created_at, co.updated_at
     ORDER BY co.domain ASC
     LIMIT ? OFFSET ?
   `);

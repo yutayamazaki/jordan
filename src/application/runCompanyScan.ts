@@ -120,10 +120,9 @@ export async function collectCompanyScan(
 
   if (learnedPatternRecord) {
     console.log(
-      "\n👺 Use learned email pattern from repository (skip web detection) ...",
+      "\nUse learned email pattern from repository (skip web detection) ...",
     );
   } else {
-    console.log("\n👺 Detect email pattern by web search ...");
     detectedEmailPattern = await deps.emailPatternDetector.detect(
       company.domain,
     );
@@ -152,8 +151,6 @@ export async function collectCompanyScan(
     department,
   );
 
-  console.log("\n👺 Convert names to alphabet ...");
-
   const raw: CompanyScanRawData = {
     companyId,
     company,
@@ -178,8 +175,6 @@ export async function scoreCompanyScan(
     | "idGenerator"
   >,
 ): Promise<void> {
-  console.log("\n👺 Convert to DB table records ...");
-
   const candidates: ContactAndEmailCandidates[] =
     createContactAndEmailCandidates(
       raw.contacts,
@@ -297,10 +292,6 @@ export async function scoreCompanyScanFromStored(
   },
 ): Promise<void> {
   const { company, department } = options;
-
-  console.log(
-    `\n👺 Load stored scan data for ${company.domain} / ${department} ...`,
-  );
 
   const raw = await deps.rawStore.load(company.domain, department);
   if (!raw) {

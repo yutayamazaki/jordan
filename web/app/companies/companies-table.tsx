@@ -32,6 +32,12 @@ export function CompaniesTable({ companies }: CompaniesTableProps) {
             <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
               Contacts 数
             </th>
+            <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
+              作成日時
+            </th>
+            <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
+              更新日時
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -85,6 +91,16 @@ export function CompaniesTable({ companies }: CompaniesTableProps) {
               </td>
               <td className="px-3 py-2 text-sm text-slate-700">
                 {co.contactCount}
+              </td>
+              <td className="px-3 py-2 text-xs text-slate-600">
+                {co.createdAt
+                  ? new Date(co.createdAt).toLocaleString("ja-JP")
+                  : "-"}
+              </td>
+              <td className="px-3 py-2 text-xs text-slate-600">
+                {co.updatedAt
+                  ? new Date(co.updatedAt).toLocaleString("ja-JP")
+                  : "-"}
               </td>
             </tr>
           ))}

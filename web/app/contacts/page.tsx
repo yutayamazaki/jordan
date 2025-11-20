@@ -36,7 +36,9 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
     sortParam === "companyDomain" ||
     sortParam === "name" ||
     sortParam === "position" ||
-    sortParam === "department"
+    sortParam === "department" ||
+    sortParam === "createdAt" ||
+    sortParam === "updatedAt"
       ? sortParam
       : "companyDomain";
 

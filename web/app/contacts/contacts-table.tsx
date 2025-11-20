@@ -92,6 +92,8 @@ export function ContactsTable({
           <TableHead>{renderHeader("役職", "position")}</TableHead>
           <TableHead>{renderHeader("部署", "department")}</TableHead>
           <TableHead>送信可能メール</TableHead>
+          <TableHead>{renderHeader("作成日時", "createdAt")}</TableHead>
+          <TableHead>{renderHeader("更新日時", "updatedAt")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -157,6 +159,16 @@ export function ContactsTable({
                     ))}
                   </div>
                 )}
+              </TableCell>
+              <TableCell className="text-xs text-slate-600">
+                {c.createdAt
+                  ? new Date(c.createdAt).toLocaleString("ja-JP")
+                  : "-"}
+              </TableCell>
+              <TableCell className="text-xs text-slate-600">
+                {c.updatedAt
+                  ? new Date(c.updatedAt).toLocaleString("ja-JP")
+                  : "-"}
               </TableCell>
             </TableRow>
           );

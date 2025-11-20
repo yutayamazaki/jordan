@@ -90,7 +90,7 @@ async function main() {
       const department = scan.department;
 
       console.log(
-        `\n==============================\n[SCORE] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n==============================`,
+        `\n[SCORE] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n`,
       );
 
       await runCompanyScan(

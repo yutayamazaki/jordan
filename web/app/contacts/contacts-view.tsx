@@ -155,6 +155,24 @@ export function ContactsView({
                     <div className="text-xs text-slate-600">{c.position}</div>
                     <div className="text-xs text-slate-600">{c.department}</div>
                   </div>
+                  <div className="mb-2 space-y-0.5 text-[11px] text-slate-500">
+                    <div>
+                      <span className="inline-block w-14">作成</span>
+                      <span>
+                        {c.createdAt
+                          ? new Date(c.createdAt).toLocaleString("ja-JP")
+                          : "-"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="inline-block w-14">更新</span>
+                      <span>
+                        {c.updatedAt
+                          ? new Date(c.updatedAt).toLocaleString("ja-JP")
+                          : "-"}
+                      </span>
+                    </div>
+                  </div>
                   <div className="mt-auto pt-2 text-xs text-slate-600">
                     <div className="mb-1 font-semibold text-slate-700">
                       送信可能メール

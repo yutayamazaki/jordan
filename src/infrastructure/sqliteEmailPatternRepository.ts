@@ -161,7 +161,9 @@ export class SqliteEmailPatternRepository implements EmailPatternRepository {
         sample_email,
         verified_at,
         success_count,
-        total_count
+        total_count,
+        created_at,
+        updated_at
       )
       VALUES (
         @id,
@@ -173,7 +175,9 @@ export class SqliteEmailPatternRepository implements EmailPatternRepository {
         @sample_email,
         @verified_at,
         @success_count,
-        @total_count
+        @total_count,
+        @created_at,
+        @updated_at
       )
       ON CONFLICT(id) DO UPDATE SET
         company_id = excluded.company_id,
@@ -184,7 +188,8 @@ export class SqliteEmailPatternRepository implements EmailPatternRepository {
         sample_email = excluded.sample_email,
         verified_at = excluded.verified_at,
         success_count = excluded.success_count,
-        total_count = excluded.total_count
+        total_count = excluded.total_count,
+        updated_at = excluded.updated_at
       `,
     ).run({
       id: nextRecord.id,
@@ -203,7 +208,8 @@ export class SqliteEmailPatternRepository implements EmailPatternRepository {
         typeof nextRecord.totalCount === "number"
           ? nextRecord.totalCount
           : null,
+      created_at: existing ? existing.verifiedAt ?? nowIso : nowIso,
+      updated_at: nowIso,
     });
   }
 }
-

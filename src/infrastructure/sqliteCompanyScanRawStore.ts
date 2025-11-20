@@ -18,7 +18,8 @@ export class SqliteCompanyScanRawStore implements CompanyScanRawStore {
         department,
         debug,
         raw_json,
-        created_at
+        created_at,
+        updated_at
       )
       VALUES (
         @id,
@@ -28,7 +29,8 @@ export class SqliteCompanyScanRawStore implements CompanyScanRawStore {
         @department,
         @debug,
         @raw_json,
-        @created_at
+        @created_at,
+        @updated_at
       )
       ON CONFLICT(id) DO UPDATE SET
         company_id = excluded.company_id,
@@ -37,7 +39,7 @@ export class SqliteCompanyScanRawStore implements CompanyScanRawStore {
         department = excluded.department,
         debug = excluded.debug,
         raw_json = excluded.raw_json,
-        created_at = excluded.created_at
+        updated_at = excluded.updated_at
       `,
     ).run({
       id: raw.companyId,
@@ -48,6 +50,7 @@ export class SqliteCompanyScanRawStore implements CompanyScanRawStore {
       debug: 0,
       raw_json: json,
       created_at: nowIso,
+      updated_at: nowIso,
     });
   }
 

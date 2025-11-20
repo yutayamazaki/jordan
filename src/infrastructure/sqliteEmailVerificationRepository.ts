@@ -169,7 +169,9 @@ export class SqliteEmailVerificationRepository implements EmailVerificationRepos
         additional_status_info,
         domain_country_code,
         mail_server_country_code,
-        raw_response_snippet
+        raw_response_snippet,
+        created_at,
+        updated_at
       )
       VALUES (
         @id,
@@ -198,7 +200,9 @@ export class SqliteEmailVerificationRepository implements EmailVerificationRepos
         @additional_status_info,
         @domain_country_code,
         @mail_server_country_code,
-        @raw_response_snippet
+        @raw_response_snippet,
+        @created_at,
+        @updated_at
       )
       `,
     ).run({
@@ -249,6 +253,8 @@ export class SqliteEmailVerificationRepository implements EmailVerificationRepos
       domain_country_code: record.domainCountryCode ?? null,
       mail_server_country_code: record.mailServerCountryCode ?? null,
       raw_response_snippet: record.rawResponseSnippet ?? null,
+      created_at: nowIso,
+      updated_at: nowIso,
     });
   }
 }

@@ -79,6 +79,7 @@ export class SqliteContactSearchCachesRepository
 
     const id = record.id || randomUUID();
     const searchedAtIso = record.searchedAt || new Date().toISOString();
+     const nowIso = new Date().toISOString();
 
     const parsed = ContactSearchCachesRecordSchema.parse({
       ...record,
@@ -96,7 +97,9 @@ export class SqliteContactSearchCachesRepository
         department,
         company_name,
         contacts_json,
-        searched_at
+        searched_at,
+        created_at,
+        updated_at
       )
       VALUES (
         @id,
@@ -104,14 +107,17 @@ export class SqliteContactSearchCachesRepository
         @department,
         @company_name,
         @contacts_json,
-        @searched_at
+        @searched_at,
+        @created_at,
+        @updated_at
       )
       ON CONFLICT(id) DO UPDATE SET
         domain = excluded.domain,
         department = excluded.department,
         company_name = excluded.company_name,
         contacts_json = excluded.contacts_json,
-        searched_at = excluded.searched_at
+        searched_at = excluded.searched_at,
+        updated_at = excluded.updated_at
       `,
     ).run({
       id: parsed.id,
@@ -120,7 +126,8 @@ export class SqliteContactSearchCachesRepository
       company_name: parsed.companyName ?? null,
       contacts_json: contactsJson,
       searched_at: parsed.searchedAt,
+      created_at: parsed.searchedAt,
+      updated_at: nowIso,
     });
   }
 }
-
