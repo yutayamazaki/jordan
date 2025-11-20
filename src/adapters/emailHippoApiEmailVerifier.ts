@@ -1,18 +1,6 @@
 import { EmailVerifier, EmailVerificationResult } from "../application/ports";
-import { err, ok, Result, ResultAsync } from "neverthrow";
-
-const fetchJson = (url: string): ResultAsync<unknown, Error> =>
-  ResultAsync.fromPromise(
-    (async () => {
-      const response = await fetch(url, { method: "GET" });
-      if (!response.ok) {
-        throw new Error(`Request failed with status code ${response.status}`);
-      }
-      return response.json();
-    })(),
-    (error) =>
-      error instanceof Error ? error : new Error("Unknown EmailHippo API error"),
-  );
+import { err, ok, Result } from "neverthrow";
+import { fetchJson } from "./fetchHelpers";
 
 type EmailHippoApiResponse = {
   meta?: {
@@ -79,7 +67,7 @@ export class EmailHippoApiEmailVerifier implements EmailVerifier {
     const encodedEmail = encodeURIComponent(email);
 
     const url = `https://api.hippoapi.com/v3/more/json/${encodedKey}/${encodedEmail}`;
-    const fetchResult = await fetchJson(url);
+    const fetchResult = await fetchJson<EmailHippoApiResponse>(url);
 
     if (fetchResult.isErr()) {
       console.error(`EmailHippo API call failed for email ${email}:`, fetchResult.error);
@@ -92,7 +80,7 @@ export class EmailHippoApiEmailVerifier implements EmailVerifier {
       };
     }
 
-    const data = fetchResult.value as EmailHippoApiResponse;
+    const data = fetchResult.value;
 
     const metaEmail = data.meta?.email;
 
