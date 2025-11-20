@@ -170,7 +170,7 @@ npm install
 ```bash
 OPENAI_API_KEY=sk-...
 EMAIL_HIPPO_API_KEY=your_email_hippo_key
-COLLECT_CONCURRENCY=10
+COLLECT_CONCURRENCY=20
 ```
 
 SQLite の DB パスはデフォルトで `data/jordan.sqlite` が使われます（`getDb()` の引数で上書き可能）。
@@ -178,7 +178,7 @@ SQLite の DB パスはデフォルトで `data/jordan.sqlite` が使われま�
 collect フェーズの並列実行数は、以下の環境変数で制御できます（デフォルト: 10）。
 
 ```bash
-COLLECT_CONCURRENCY=10
+COLLECT_CONCURRENCY=20
 ```
 
 ### ローカル開発（テスト・Lint）
