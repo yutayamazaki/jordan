@@ -129,14 +129,31 @@ export async function collectCompanyScan(
       console.log(
         "\nUse learned email pattern from repository (skip web detection) ...",
       );
-    } else {
-      const detectedEmailPatternResult = await deps.emailPatternDetector.detect(
-        company.domain,
-      );
+    }
+
+    // LLM待ちなどの待機時間を重ねるため、パターン検出とコンタクト検索を並列実行する
+    const detectionPromise = learnedPatternRecord
+      ? Promise.resolve(ok<EmailPattern | null, Error>(null))
+      : deps.emailPatternDetector.detect(company.domain);
+    const contactsPromise = deps.contactFinder.searchContacts(
+      company.name,
+      company.domain,
+      department,
+    );
+    const [detectedEmailPatternResult, contactsResult] = await Promise.all([
+      detectionPromise,
+      contactsPromise,
+    ]);
+
+    if (!learnedPatternRecord) {
       if (detectedEmailPatternResult.isErr()) {
         return err(detectedEmailPatternResult.error);
       }
       detectedEmailPattern = detectedEmailPatternResult.value;
+    }
+
+    if (contactsResult.isErr()) {
+      return err(contactsResult.error);
     }
 
     const patternDecision = decideEmailPattern(
@@ -152,16 +169,6 @@ export async function collectCompanyScan(
       },
       deps.idGenerator,
     );
-
-    const contactsResult = await deps.contactFinder.searchContacts(
-      company.name,
-      company.domain,
-      department,
-    );
-
-    if (contactsResult.isErr()) {
-      return err(contactsResult.error);
-    }
 
     const raw: CompanyScanRawData = {
       companyId,
