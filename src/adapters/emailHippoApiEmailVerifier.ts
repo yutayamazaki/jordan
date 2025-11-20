@@ -1,44 +1,15 @@
-import {
-  EmailVerifier,
-  EmailVerificationResult,
-} from "../application/ports";
-import https from "https";
+import { EmailVerifier, EmailVerificationResult } from "../application/ports";
 import { err, ok, Result, ResultAsync } from "neverthrow";
 
 const fetchJson = (url: string): ResultAsync<unknown, Error> =>
   ResultAsync.fromPromise(
-    new Promise((resolve, reject) => {
-      https
-        .get(url, (res) => {
-          const { statusCode } = res;
-          if (!statusCode || statusCode < 200 || statusCode >= 300) {
-            res.resume(); // drain on error responses
-            reject(new Error(`Request failed with status code ${statusCode}`));
-            return;
-          }
-
-          let rawData = "";
-          res.setEncoding("utf8");
-          res.on("data", (chunk) => {
-            rawData += chunk;
-          });
-          res.on("end", () => {
-            try {
-              const parsed = JSON.parse(rawData);
-              resolve(parsed);
-            } catch (error) {
-              reject(
-                error instanceof Error
-                  ? error
-                  : new Error("Failed to parse EmailHippo API response as JSON"),
-              );
-            }
-          });
-        })
-        .on("error", (err) => {
-          reject(err);
-        });
-    }),
+    (async () => {
+      const response = await fetch(url, { method: "GET" });
+      if (!response.ok) {
+        throw new Error(`Request failed with status code ${response.status}`);
+      }
+      return response.json();
+    })(),
     (error) =>
       error instanceof Error ? error : new Error("Unknown EmailHippo API error"),
   );
