@@ -169,8 +169,8 @@ npm install
 
 ```bash
 OPENAI_API_KEY=sk-...
-
 EMAIL_HIPPO_API_KEY=your_email_hippo_key
+COLLECT_CONCURRENCY=10
 ```
 
 SQLite の DB パスはデフォルトで `data/jordan.sqlite` が使われます（`getDb()` の引数で上書き可能）。

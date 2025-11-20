@@ -3,42 +3,45 @@ import {
   EmailVerificationResult,
 } from "../application/ports";
 import https from "https";
-import { err, ok, Result } from "neverthrow";
+import { err, ok, Result, ResultAsync } from "neverthrow";
 
-function fetchJson(url: string): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, (res) => {
-        const { statusCode } = res;
-        if (!statusCode || statusCode < 200 || statusCode >= 300) {
-          res.resume(); // drain
-          reject(new Error(`Request failed with status code ${statusCode}`));
-          return;
-        }
-
-        let rawData = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk) => {
-          rawData += chunk;
-        });
-        res.on("end", () => {
-          try {
-            const parsed = JSON.parse(rawData);
-            resolve(parsed);
-          } catch (error) {
-            reject(
-              error instanceof Error
-                ? error
-                : new Error("Failed to parse EmailHippo API response as JSON"),
-            );
+const fetchJson = (url: string): ResultAsync<unknown, Error> =>
+  ResultAsync.fromPromise(
+    new Promise((resolve, reject) => {
+      https
+        .get(url, (res) => {
+          const { statusCode } = res;
+          if (!statusCode || statusCode < 200 || statusCode >= 300) {
+            res.resume(); // drain on error responses
+            reject(new Error(`Request failed with status code ${statusCode}`));
+            return;
           }
+
+          let rawData = "";
+          res.setEncoding("utf8");
+          res.on("data", (chunk) => {
+            rawData += chunk;
+          });
+          res.on("end", () => {
+            try {
+              const parsed = JSON.parse(rawData);
+              resolve(parsed);
+            } catch (error) {
+              reject(
+                error instanceof Error
+                  ? error
+                  : new Error("Failed to parse EmailHippo API response as JSON"),
+              );
+            }
+          });
+        })
+        .on("error", (err) => {
+          reject(err);
         });
-      })
-      .on("error", (err) => {
-        reject(err);
-      });
-  });
-}
+    }),
+    (error) =>
+      error instanceof Error ? error : new Error("Unknown EmailHippo API error"),
+  );
 
 type EmailHippoApiResponse = {
   meta?: {
@@ -105,22 +108,20 @@ export class EmailHippoApiEmailVerifier implements EmailVerifier {
     const encodedEmail = encodeURIComponent(email);
 
     const url = `https://api.hippoapi.com/v3/more/json/${encodedKey}/${encodedEmail}`;
+    const fetchResult = await fetchJson(url);
 
-    let data: EmailHippoApiResponse;
-    try {
-      const raw = await fetchJson(url);
-      data = raw as EmailHippoApiResponse;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown EmailHippo API error";
+    if (fetchResult.isErr()) {
+      console.error(`EmailHippo API call failed for email ${email}:`, fetchResult.error);
       return {
         email,
         isDeliverable: false,
         hasMxRecords: false,
-        reason: `EmailHippo API call failed: ${message}`,
+        reason: `EmailHippo API call failed: ${fetchResult.error.message}`,
         source: "email_hippo",
       };
     }
+
+    const data = fetchResult.value as EmailHippoApiResponse;
 
     const metaEmail = data.meta?.email;
 

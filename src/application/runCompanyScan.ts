@@ -152,7 +152,6 @@ export async function collectCompanyScan(
       },
       deps.idGenerator,
     );
-    patternDecision.logMessages.forEach((message) => console.log(message));
 
     const contactsResult = await deps.contactFinder.searchContacts(
       company.name,
