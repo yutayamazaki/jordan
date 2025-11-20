@@ -1,6 +1,4 @@
 import "dotenv/config";
-import http from "http";
-import https from "https";
 import { err, ok, Result, ResultAsync } from "neverthrow";
 import { getDb } from "./infrastructure/sqliteClient";
 
@@ -75,30 +73,36 @@ function loadCompanies(db: any): Result<CompanyRow[], Error> {
   }
 }
 
-function checkUrl(url: string, timeoutMs = 5000): ResultAsync<boolean, Error> {
+function checkUrl(url: string, timeoutMs = 1000): ResultAsync<boolean, Error> {
   return ResultAsync.fromPromise(
-    new Promise<boolean>((resolve) => {
-      const lib = url.startsWith("https") ? https : http;
+    (async () => {
+      const request = async (method: "HEAD" | "GET") => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      const req = lib.request(
-        url,
-        { method: "HEAD", timeout: timeoutMs },
-        (res) => {
-          const status = res.statusCode ?? 0;
-          const okStatus = status >= 200 && status < 400;
-          res.resume();
-          resolve(okStatus);
+        try {
+          const res = await fetch(url, {
+            method,
+            redirect: "manual",
+            signal: controller.signal,
+          });
+
+          return res.status >= 200 && res.status < 400;
+        } catch {
+          return false;
+        } finally {
+          clearTimeout(timer);
         }
-      );
+      };
 
-      req.on("error", () => resolve(false));
-      req.on("timeout", () => {
-        req.destroy();
-        resolve(false);
-      });
+      // まずHEADを試し、失敗したらGETを試す
+      const headOk = await request("HEAD");
+      if (headOk) {
+        return true;
+      }
 
-      req.end();
-    }),
+      return request("GET");
+    })(),
     (error) =>
       error instanceof Error ? error : new Error("Unknown HTTP request error")
   );
