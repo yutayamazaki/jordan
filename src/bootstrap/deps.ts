@@ -6,11 +6,13 @@ import { UuidGenerator } from "../infrastructure/idGenerator";
 import { SqliteEmailVerificationRepository } from "../infrastructure/sqliteEmailVerificationRepository";
 import { SqliteCompanyScanRawStore } from "../infrastructure/sqliteCompanyScanRawStore";
 import { SqliteEmailPatternRepository } from "../infrastructure/sqliteEmailPatternRepository";
+import { SqliteContactSearchCachesRepository } from "../infrastructure/sqliteContactSearchCachesRepository";
 import { RunCompanyScanWithStoreDependencies } from "../application/runCompanyScan";
 
 export function createRunCompanyScanDeps(): RunCompanyScanWithStoreDependencies {
   const emailPatternDetector = new LlmEmailPatternDetector();
-  const contactFinder = new LlmContactFinder();
+  const contactSearchCachesRepository = new SqliteContactSearchCachesRepository();
+  const contactFinder = new LlmContactFinder(contactSearchCachesRepository);
   const leadExporter = new SqliteLeadExporter();
   const idGenerator = new UuidGenerator();
   const emailVerifier = new EmailHippoApiEmailVerifier();
@@ -29,4 +31,3 @@ export function createRunCompanyScanDeps(): RunCompanyScanWithStoreDependencies 
     emailPatternRepository,
   };
 }
-

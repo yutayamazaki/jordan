@@ -1,11 +1,7 @@
 import { EmailPattern } from "../domain/entities/emailPattern";
-import {
-  CompanyRecord,
-  ContactRecord,
-  EmailCandidateRecord,
-  EmailPatternRecord,
-} from "../domain";
+import { CompanyRecord, ContactRecord, EmailCandidateRecord, EmailPatternRecord } from "../domain";
 import { ContactResponse } from "../domain/entities/contact";
+import type { ContactSearchCachesRecord } from "../domain/entities/contactSearchCaches";
 
 export type EmailVerificationSource = "dns_mx" | "email_hippo";
 
@@ -81,6 +77,15 @@ export interface ContactFinder {
     domain: string,
     department: string,
   ): Promise<ContactResponse[]>;
+}
+
+export interface ContactSearchCachesRepository {
+  findRecent(
+    domain: string,
+    department: string,
+    maxAgeDays: number,
+  ): Promise<ContactSearchCachesRecord | null>;
+  save(record: ContactSearchCachesRecord): Promise<void>;
 }
 
 export interface EmailVerifier {

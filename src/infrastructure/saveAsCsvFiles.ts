@@ -25,8 +25,6 @@ export async function saveAsCsvFiles(
   emailCandidateRecords: EmailCandidateRecord[],
   emailPatternRecords: EmailPatternRecord[],
 ): Promise<void> {
-  console.log("\n👺 Save results to CSV files ...");
-
   const baseDir = "outputs";
   if (!existsSync(baseDir)) {
     mkdirSync(baseDir, { recursive: true });

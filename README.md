@@ -27,6 +27,7 @@ B2B 企業の担当者情報を Web 検索＋LLM（OpenAI Structured Outputs）�
     - LLM（`LlmEmailPatternDetector`）によるドメインごとのパターン推定
     - 過去の学習パターン（`email_patterns` テーブル）を優先的に使用
   - Web 検索＋LLM による担当者候補取得（`LlmContactFinder`）
+    - ドメイン × 部署ごとの検索結果は `contact_search_caches` テーブルに最大 90 日間キャッシュし、同じ組み合わせの再検索時は LLM 呼び出しをスキップ
   - 担当者情報などの「生データ」を `CompanyScanRawData` として JSON 化（メール候補はまだ生成しない）
   - JSON を `company_scans` テーブルに保存（`SqliteCompanyScanRawStore`）
 
@@ -63,23 +64,7 @@ score フェーズは、「収集済みの生データに対して後から検�
 
 ## ドメインモデル・スキーマ
 
-### `src/domain/index.ts`
-
-DB に保存するレコード形式を `zod` で定義しています。
-
-- `CompanySchema` / `CompanyRecord`
-  - `id`, `name`, `domain`
-- `ContactSchema` / `ContactRecord`
-  - `id`, `companyId`, `name`, `position`, `department`, `departmentCategory`, `firstName`, `lastName`
-- `EmailCandidateSchema` / `EmailCandidateRecord`
-  - 1 人の担当者に紐づく複数候補メールアドレス
-  - `isPrimary`, `confidence`, `type`, `pattern`, `isDeliverable`, `hasMxRecords`, `verificationReason` など
-- `EmailPatternRecordSchema` / `EmailPatternRecord`
-  - ドメインごとのメールパターン学習結果
-  - `pattern`, `reason`, `domain`, `source`, `sampleEmail`, `verifiedAt`, `successCount`, `totalCount`
-- `EmailVerificationRecordSchema` / `EmailVerificationRecord`
-  - EmailHippo などの検証結果のキャッシュ
-  - さまざまな検証結果フィールド（syntax, DNS, mailbox, risk, trust score など）を保持
+[DATBASE.md](./DATBASE.md) に各テーブルのスキーマ定義があります。
 
 ### `src/domain/entities/`
 
@@ -126,7 +111,7 @@ DB に保存するレコード形式を `zod` で定義しています。
 - `src/application/ports.ts`
   - アプリケーション層が利用するポート（インターフェース）定義
   - `ContactFinder`, `EmailPatternDetector`, `EmailVerifier`,  
-    `LeadExporter`, `EmailVerificationRepository`, `EmailPatternRepository`, `IdGenerator` など
+    `LeadExporter`, `EmailVerificationRepository`, `EmailPatternRepository`, `ContactSearchCachesRepository`, `IdGenerator` など
 
 ### アダプタ層
 
@@ -154,6 +139,8 @@ DB に保存するレコード形式を `zod` で定義しています。
   - EmailHippo の検証結果を `email_verifications` テーブルに保存し、一定期間内の結果を再利用
 - `src/infrastructure/sqliteEmailPatternRepository.ts`
   - メールパターン学習結果を `email_patterns` テーブルに保存・取得
+- `src/infrastructure/sqliteContactSearchCachesRepository.ts`
+  - Web 検索＋LLM で取得した担当者情報を `contact_search_caches` テーブルに保存し、同じドメイン × 部署の再検索時にキャッシュを優先的に利用
 - `src/infrastructure/idGenerator.ts`
   - UUID ベースの ID 生成
 
@@ -247,8 +234,7 @@ npm run collect -- ./inputs/companies.csv
 - 各企業について
   - メールパターン推定
   - 担当者候補収集
-  - メール候補生成
-  が行われ、結果は `company_scans` テーブルに保存されます。
+  が行われ、結果は `company_scans` テーブルに保存されます（この段階ではメール候補はまだ生成されません）。
 - 既に同じドメイン × 部署の collect 結果が存在する場合はデフォルトでスキップされます。上書きしたい場合は `--on-exists=overwrite` を指定してください。
 
 ### 2. score フェーズだけ実行
@@ -303,6 +289,7 @@ npm run show-domain -- --domain example.com
   - `email_patterns` … ドメインごとのメールパターン学習結果
   - `email_verifications` … メール検証結果キャッシュ
   - `company_scans` … collect フェーズでの生データ JSON
+  - `contact_search_caches` … Web 検索＋LLM による担当者情報の検索結果キャッシュ（ドメイン × 部署ごとに保存し、一定期間内の再検索で再利用）
 
 必要に応じて、この DB から CSV をエクスポートして既存の CRM / MA ツールにインポートできます。
 

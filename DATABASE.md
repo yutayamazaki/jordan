@@ -97,3 +97,14 @@
 | debug          | INTEGER| NOT NULL    | デバッグフラグ（0/1）              |
 | raw_json       | TEXT   | NOT NULL    | 生データ（JSON 文字列）           |
 | created_at     | TEXT   | NOT NULL    | 作成日時（ISO 文字列）             |
+
+## contact_search_caches
+
+| カラム名      | 型   | 制約        | 説明                                            |
+|---------------|------|-------------|-------------------------------------------------|
+| id            | TEXT | PRIMARY KEY | キャッシュレコード ID（UUID）                  |
+| domain        | TEXT | NOT NULL    | 対象ドメイン                                   |
+| department    | TEXT | NOT NULL    | 対象部署                                       |
+| company_name  | TEXT |             | 会社名（任意、検索時の会社名メモとして保存）   |
+| contacts_json | TEXT | NOT NULL    | 担当者情報配列の JSON（ContactResponse[]）     |
+| searched_at   | TEXT | NOT NULL    | Web 検索実行日時（ISO 文字列）                 |

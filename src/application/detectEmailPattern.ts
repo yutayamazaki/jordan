@@ -2,36 +2,19 @@ import { createStructuredOutputs } from "../adapters/openai";
 import { EmailPattern, EmailPatternSchema } from "../domain/entities/emailPattern";
 
 const createEmailPatternPrompt = (domain: string) => {
-  return `
-以下の会社ドメインについて、WEB検索を行い、実際に公開されているメールアドレスの例から、一般的に使われているメールアドレスの構成パターンを推定してください。
-その際、「どのような検索クエリで検索すればメールアドレスに到達しやすいか」を意識して、効果的な検索クエリを自分で設計してから検索を行ってください。
-さらに、パターン推定の根拠となる「情報ソース（どのURL・どのページタイトルのサイトから得たか）」も一緒に構造化して出力してください。
+  return `あなたは企業のメールアドレスパターンを分析する専門家です。
 
-- ドメイン: ${domain}
+タスク: ${domain} で使用されているメールアドレスの構成パターンを特定してください。
 
-## 検索クエリ設計のヒント
+手順:
+1. 効果的な検索クエリを設計し、実際のメールアドレス例を探す
+2. 見つかった例から最も一般的なパターンを1つ特定する
+3. パターンの根拠となった情報源を記録する
 
-メールアドレスが見つかりやすいページや文脈を狙って、以下のような検索クエリを組み合わせて活用してください。
-
-- 公式サイト内のメール表記を探すクエリ
-  - \`"${domain}" "@${domain}"\`
-  - \`"@${domain}" site:${domain}\`
-  - \`"contact@${domain}" OR "info@${domain}" OR "support@${domain}"\`
-- お問い合わせ・会社情報ページを狙うクエリ
-  - \`"${domain}" "お問い合わせ" "@"\`
-  - \`"${domain}" "contact" "@"\`
-  - \`"${domain}" "会社情報" "@"\`
-- 採用・メンバー紹介ページを狙うクエリ
-  - \`"${domain}" "採用" "@"\`
-  - \`"${domain}" "メンバー紹介" "@"\`
-  - \`"${domain}" "recruit" "@"\`
-- 英語表記の連絡先を狙うクエリ
-  - \`"${domain}" "email" "@"\`
-  - \`"${domain}" "contact us" "@"\`
-  - \`"${domain}" "get in touch" "@"\`
-
-これらをベースに、「サイト内検索（site:）」や会社名・サービス名との組み合わせなど、必要に応じてクエリを工夫して構いません。
-重要なのは、実際のメールアドレス文字列（"@${domain}" を含む文字列）にたどり着くようなクエリ設計を行うことです。
+検索戦略のヒント:
+- 公式サイトの連絡先ページ: "@${domain}" site:${domain}
+- お問い合わせ・採用ページ: "${domain}" "contact" OR "採用" "@"
+- 特定の共通アドレス: "info@${domain}" OR "support@${domain}"
 
 以下のパターンの中から、最も一般的に使われていると考えられるものを1つだけ選んでください:
 - "first.last"   : firstName.lastName@${domain}
@@ -51,10 +34,22 @@ const createEmailPatternPrompt = (domain: string) => {
 「パターンを特定できなかった」という事実をデータとして表現してください。
 その場合、pattern には一般的なデフォルトパターンとして "f-last" を設定し、
 found フィールドを false にしてください。
+
 sources フィールドには、検索を行ったが有効なメールアドレスが見つからなかったことが分かるページ（会社情報ページやお問い合わせページなど）があれば、そのURLとページタイトルを含めてください。
 
 回答はJSON形式で、以下のスキーマに従ってください:
-${EmailPatternSchema.toString()}
+
+{
+  "pattern": string // 以下のいずれか: "last", "first.last", "last.first", "first-last", "last-first", "first_last", "last_first", "firstlast", "lastfirst", "f.last", "f-last", "f_last", "flast",
+  "reason": string, // そのパターンを選択した理由や、パターンを特定できなかった場合の説明
+  "found": boolean, // 実際の公開メールからパターンを特定できた場合は true、特定できずデフォルトパターンを利用する場合は false,
+  "sources": [      // パターン推定に利用したページ情報の配列
+    {
+      "url": string | null,       // 参照したページのURL
+      "pageTitle": string | null  // 参照したページのタイトル
+    }
+  ]
+}
 
 注意点:
 - 回答には引用・参照・citationなどの情報を付与しないでください
@@ -68,7 +63,7 @@ export async function detectEmailPattern(domain: string): Promise<EmailPattern |
   const prompt = createEmailPatternPrompt(domain);
   const result = await createStructuredOutputs(prompt, EmailPatternSchema, {
     useWebSearch: true,
-    reasoningEffort: "minimal",
+    reasoningEffort: "low",
     model: "gpt-5-mini-2025-08-07",
   });
 

@@ -21,12 +21,10 @@ function ensureWebsiteColumns(db: any): void {
 
   if (!hasWebsiteUrl) {
     db.prepare('ALTER TABLE companies ADD COLUMN website_url TEXT').run();
-    console.log('Added column "website_url" to companies table.');
   }
 
   if (!hasFaviconUrl) {
     db.prepare('ALTER TABLE companies ADD COLUMN favicon_url TEXT').run();
-    console.log('Added column "favicon_url" to companies table.');
   }
 }
 

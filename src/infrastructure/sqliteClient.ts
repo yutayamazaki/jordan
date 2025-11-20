@@ -113,5 +113,14 @@ function initSchema(db: any): void {
       raw_json TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS contact_search_caches (
+      id TEXT PRIMARY KEY,
+      domain TEXT NOT NULL,
+      department TEXT NOT NULL,
+      company_name TEXT,
+      contacts_json TEXT NOT NULL,
+      searched_at TEXT NOT NULL
+    );
   `);
 }

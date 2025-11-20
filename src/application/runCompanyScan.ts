@@ -71,11 +71,6 @@ export async function collectCompanyScan(
 ): Promise<CompanyScanRawData> {
   const { company, department } = options;
 
-  let detectedEmailPattern: EmailPattern | null = null;
-  let emailPattern: EmailPattern["pattern"];
-  console.log("\n👺 Detect email pattern by web search ...");
-  detectedEmailPattern = await deps.emailPatternDetector.detect(company.domain);
-
   const companyId = deps.idGenerator.generate();
 
   const MAX_PATTERN_AGE_DAYS = 365;
@@ -84,6 +79,20 @@ export async function collectCompanyScan(
       company.domain,
       MAX_PATTERN_AGE_DAYS,
     );
+
+  let detectedEmailPattern: EmailPattern | null = null;
+  let emailPattern: EmailPattern["pattern"];
+
+  if (learnedPatternRecord) {
+    console.log(
+      "\n👺 Use learned email pattern from repository (skip web detection) ...",
+    );
+  } else {
+    console.log("\n👺 Detect email pattern by web search ...");
+    detectedEmailPattern = await deps.emailPatternDetector.detect(
+      company.domain,
+    );
+  }
 
   const patternDecision = decideEmailPattern(
     companyId,
@@ -107,7 +116,6 @@ export async function collectCompanyScan(
     company.domain,
     department,
   );
-  console.log("Contacts:", JSON.stringify(contacts, null, 2));
 
   console.log("\n👺 Convert names to alphabet ...");
 

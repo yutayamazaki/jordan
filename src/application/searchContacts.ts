@@ -1,6 +1,8 @@
 import { createStructuredOutputs } from "../adapters/openai";
 import { ContactListResponseSchema, ContactResponse } from "../domain/entities/contact";
 import { getDepartmentCategorySearchInfo } from "./departmentClassifier";
+import { ContactSearchCachesRepository } from "./ports";
+import { randomUUID } from "crypto";
 
 const createContactSearchPrompt = (name: string, domain: string, department: string) => {
   const trimmedDepartment = department.trim();
@@ -102,7 +104,7 @@ ${ContactListResponseSchema.toString()}
 `;
 };
 
-export async function searchContacts(
+async function searchContactsWithLLM(
   name: string,
   domain: string,
   department: string,
@@ -118,4 +120,42 @@ export async function searchContacts(
     throw result.error;
   }
   return result.value.contacts;
+}
+
+const CONTACT_SEARCH_MAX_AGE_DAYS = 90;
+
+export async function searchContacts(
+  name: string,
+  domain: string,
+  department: string,
+  contactSearchCachesRepository?: ContactSearchCachesRepository,
+): Promise<ContactResponse[]> {
+  if (contactSearchCachesRepository) {
+    const cached = await contactSearchCachesRepository.findRecent(
+      domain,
+      department,
+      CONTACT_SEARCH_MAX_AGE_DAYS,
+    );
+    if (cached) {
+      console.log(
+        `Using cached contact search result for domain=${domain}, department=${department}`,
+      );
+      return cached.contacts;
+    }
+  }
+
+  const contacts = await searchContactsWithLLM(name, domain, department);
+
+  if (contactSearchCachesRepository) {
+    await contactSearchCachesRepository.save({
+      id: randomUUID(),
+      domain,
+      department,
+      companyName: name,
+      contacts,
+      searchedAt: new Date().toISOString(),
+    });
+  }
+
+  return contacts;
 }
