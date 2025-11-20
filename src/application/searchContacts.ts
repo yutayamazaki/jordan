@@ -109,11 +109,11 @@ export async function searchContacts(
 ): Promise<ContactResponse[]> {
   console.log("\n👺 Search Web to get contact info ...");
   const contactSearchPrompt = createContactSearchPrompt(name, domain, department);
-  const result = await createStructuredOutputs(
-    contactSearchPrompt,
-    ContactListResponseSchema,
-    true,
-  );
+  const result = await createStructuredOutputs(contactSearchPrompt, ContactListResponseSchema, {
+    useWebSearch: true,
+    reasoningEffort: "medium",
+    model: "gpt-5-mini-2025-08-07",
+  });
   if (result.isErr()) {
     throw result.error;
   }

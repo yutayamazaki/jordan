@@ -15,25 +15,38 @@ function getOpenAIApiKey(): Result<string, Error> {
   return ok(apiKey);
 }
 
+export type StructuredOutputOptions = {
+  model: "gpt-5-mini-2025-08-07" | "gpt-5-nano-2025-08-07";
+  useWebSearch: boolean;
+  reasoningEffort: "minimal" | "low" | "medium" | "high";
+};
+
+const DEFAULT_MODEL = "gpt-5-nano-2025-08-07";
+const DEFAULT_REASONING_EFFORT: StructuredOutputOptions["reasoningEffort"] = "minimal";
+
 export async function createStructuredOutputs<T extends ZodType>(
   prompt: string,
   schema: T,
-  useWebSearch: boolean = false,
+  options: StructuredOutputOptions = {
+    model: DEFAULT_MODEL,
+    useWebSearch: false,
+    reasoningEffort: DEFAULT_REASONING_EFFORT,
+  },
 ): Promise<Result<z.infer<T>, Error>> {
   const apiKeyResult = getOpenAIApiKey();
   if (apiKeyResult.isErr()) {
     return err(apiKeyResult.error);
   }
 
-  const openai = new OpenAI({ apiKey: apiKeyResult.value, dangerouslyAllowBrowser: true });
+  const openai = new OpenAI({ apiKey: apiKeyResult.value });
 
   try {
     const response = await openai.responses.parse({
-      model: "gpt-5-mini-2025-08-07",
+      model: options.model,
       input: prompt,
-      tools: useWebSearch ? ([{ type: "web_search" }] as any) : undefined,
+      tools: options.useWebSearch ? ([{ type: "web_search" }] as any) : undefined,
       text: { format: zodTextFormat(schema, "structured") },
-      reasoning: { effort: "low" },
+      reasoning: { effort: options.reasoningEffort },
     });
     const parsed = response.output_parsed as z.infer<T> | null;
     if (!parsed) {

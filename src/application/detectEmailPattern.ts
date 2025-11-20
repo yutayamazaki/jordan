@@ -66,7 +66,11 @@ ${EmailPatternSchema.toString()}
 
 export async function detectEmailPattern(domain: string): Promise<EmailPattern | null> {
   const prompt = createEmailPatternPrompt(domain);
-  const result = await createStructuredOutputs(prompt, EmailPatternSchema, true);
+  const result = await createStructuredOutputs(prompt, EmailPatternSchema, {
+    useWebSearch: true,
+    reasoningEffort: "minimal",
+    model: "gpt-5-mini-2025-08-07",
+  });
 
   if (result.isErr()) {
     throw result.error;
