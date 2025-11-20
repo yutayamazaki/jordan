@@ -1,47 +1,74 @@
 import { EmailVerifier, EmailVerificationResult } from "../application/ports";
 import { err, ok, Result } from "neverthrow";
 import { fetchJson } from "./fetchHelpers";
+import { z } from "zod";
 
-type EmailHippoApiResponse = {
-  meta?: {
-    email?: string;
-  };
-  emailVerification?: {
-    syntaxVerification?: {
-      isSyntaxValid?: boolean;
-      reason?: string;
-    };
-    dnsVerification?: {
-      isDomainHasDnsRecord?: boolean;
-      isDomainHasMxRecords?: boolean;
-    };
-    mailboxVerification?: {
-      result?: string;
-      reason?: string;
-    };
-  };
-  infrastructure?: {
-    mail?: {
-      serviceTypeId?: string;
-      mailServerLocation?: string;
-    };
-  };
-  sendAssess?: {
-    inboxQualityScore?: number;
-    sendRecommendation?: string;
-  };
-  spamAssess?: {
-    isDisposableEmailAddress?: boolean;
-    overallRiskScore?: number;
-  };
-  spamTrapAssess?: {
-    isSpamTrap?: boolean;
-  };
-  hippoTrust?: {
-    score?: number;
-    level?: string;
-  };
-};
+const emailHippoApiResponseSchema = z
+  .object({
+    meta: z
+      .object({
+        email: z.string().optional(),
+      })
+      .optional(),
+    emailVerification: z
+      .object({
+        syntaxVerification: z
+          .object({
+            isSyntaxValid: z.boolean().optional(),
+            reason: z.string().optional(),
+          })
+          .optional(),
+        dnsVerification: z
+          .object({
+            isDomainHasDnsRecord: z.boolean().optional(),
+            isDomainHasMxRecords: z.boolean().optional(),
+          })
+          .optional(),
+        mailboxVerification: z
+          .object({
+            result: z.string().optional(),
+            reason: z.string().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+    infrastructure: z
+      .object({
+        mail: z
+          .object({
+            serviceTypeId: z.string().optional(),
+            mailServerLocation: z.string().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+    sendAssess: z
+      .object({
+        inboxQualityScore: z.number().optional(),
+        sendRecommendation: z.string().optional(),
+      })
+      .optional(),
+    spamAssess: z
+      .object({
+        isDisposableEmailAddress: z.boolean().optional(),
+        overallRiskScore: z.number().optional(),
+      })
+      .optional(),
+    spamTrapAssess: z
+      .object({
+        isSpamTrap: z.boolean().optional(),
+      })
+      .optional(),
+    hippoTrust: z
+      .object({
+        score: z.number().optional(),
+        level: z.string().optional(),
+      })
+      .optional(),
+  })
+  .passthrough();
+
+type EmailHippoApiResponse = z.infer<typeof emailHippoApiResponseSchema>;
 
 export class EmailHippoApiEmailVerifier implements EmailVerifier {
   private readonly apiKey: string;
@@ -67,7 +94,10 @@ export class EmailHippoApiEmailVerifier implements EmailVerifier {
     const encodedEmail = encodeURIComponent(email);
 
     const url = `https://api.hippoapi.com/v3/more/json/${encodedKey}/${encodedEmail}`;
-    const fetchResult = await fetchJson<EmailHippoApiResponse>(url);
+    const fetchResult = await fetchJson<EmailHippoApiResponse>(
+      url,
+      emailHippoApiResponseSchema,
+    );
 
     if (fetchResult.isErr()) {
       console.error(`EmailHippo API call failed for email ${email}:`, fetchResult.error);
@@ -75,7 +105,7 @@ export class EmailHippoApiEmailVerifier implements EmailVerifier {
         email,
         isDeliverable: false,
         hasMxRecords: false,
-        reason: `EmailHippo API call failed: ${fetchResult.error.message}`,
+        reason: `EmailHippo API call failed: ${JSON.stringify(fetchResult.error)}`,
         source: "email_hippo",
       };
     }

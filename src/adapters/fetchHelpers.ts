@@ -1,35 +1,56 @@
-import { ResultAsync } from "neverthrow";
+import { z } from 'zod';
+import { Result, ok, err } from 'neverthrow';
 
-export type FetchJsonOptions = RequestInit & {
-  timeoutMs?: number;
-};
+type FetchError = 
+  | { type: 'network'; message: string }
+  | { type: 'http'; status: number; statusText: string }
+  | { type: 'parse'; message: string }
+  | { type: 'validation'; errors: z.ZodError };
 
-export function fetchJson<T = unknown>(
+export async function fetchJson<T>(
   url: string,
-  options?: FetchJsonOptions,
-): ResultAsync<T, Error> {
-  return ResultAsync.fromPromise(
-    (async () => {
-      const { timeoutMs = 1000, method = "GET", ...init } = options ?? {};
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+  schema: z.ZodSchema<T>,
+  options?: RequestInit
+): Promise<Result<T, FetchError>> {
+  try {
+    // HTTPリクエストを送信
+    const response = await fetch(url, options);
 
-      try {
-        const response = await fetch(url, {
-          ...init,
-          method,
-          signal: controller.signal,
-        });
+    // HTTPステータスチェック
+    if (!response.ok) {
+      return err({
+        type: 'http',
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
 
-        if (!response.ok) {
-          throw new Error(`Request failed with status code ${response.status}`);
-        }
+    // JSONパース
+    let jsonData: unknown;
+    try {
+      jsonData = await response.json();
+    } catch (e) {
+      return err({
+        type: 'parse',
+        message: e instanceof Error ? e.message : 'Failed to parse JSON',
+      });
+    }
 
-        return (await response.json()) as T;
-      } finally {
-        clearTimeout(timer);
-      }
-    })(),
-    (error) => (error instanceof Error ? error : new Error("Unknown fetch error")),
-  );
+    // Zodバリデーション
+    const parseResult = schema.safeParse(jsonData);
+    if (!parseResult.success) {
+      return err({
+        type: 'validation',
+        errors: parseResult.error,
+      });
+    }
+
+    return ok(parseResult.data);
+  } catch (e) {
+    // ネットワークエラーなど
+    return err({
+      type: 'network',
+      message: e instanceof Error ? e.message : 'Unknown network error',
+    });
+  }
 }
