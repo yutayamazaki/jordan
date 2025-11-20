@@ -11,15 +11,19 @@ type LatestCompanyScanRow = {
 };
 
 async function main() {
-  try {
-    const deps = createRunCompanyScanDeps();
+  const depsResult = createRunCompanyScanDeps();
+  if (depsResult.isErr()) {
+    console.error("Error:", depsResult.error.message);
+    process.exit(1);
+  }
+  const deps = depsResult.value;
 
-    const db = getDb();
+  const db = getDb();
 
-    // company_scans テーブルから、ドメイン x 部署ごとの最新スキャンを取得
-    const latestScans = db
-      .prepare(
-        `
+  // company_scans テーブルから、ドメイン x 部署ごとの最新スキャンを取得
+  const latestScans = db
+    .prepare(
+      `
         SELECT
           cs.company_id,
           cs.company_name,
@@ -38,18 +42,18 @@ async function main() {
           AND latest.department = cs.department
           AND latest.max_created_at = cs.created_at
         `,
-      )
-      .all() as LatestCompanyScanRow[];
+    )
+    .all() as LatestCompanyScanRow[];
 
-    if (latestScans.length === 0) {
-      console.log(
-        "No company_scans found. Please run collect phase first.",
-      );
-      return;
-    }
+  if (latestScans.length === 0) {
+    console.log(
+      "No company_scans found. Please run collect phase first.",
+    );
+    return;
+  }
 
-    const hasGoodPrimaryEmailStmt = db.prepare(
-      `
+  const hasGoodPrimaryEmailStmt = db.prepare(
+    `
       SELECT 1
       FROM contacts c
       JOIN email_candidates ec ON ec.contact_id = c.id
@@ -60,54 +64,58 @@ async function main() {
         AND ec.confidence >= 0.8
       LIMIT 1
       `,
+  );
+
+  // 「適切なメールアドレス（deliverable かつ一定以上の confidence を持つ primary）が
+  //  見つかっていない会社」のみを score 対象とする
+  const targets = latestScans.filter((scan) => {
+    const row = hasGoodPrimaryEmailStmt.get({
+      companyId: scan.company_id,
+    }) as { 1?: number } | undefined;
+    return !row;
+  });
+
+  if (targets.length === 0) {
+    console.log(
+      "All latest company_scans already have acceptable primary email candidates. Nothing to score.",
     );
+    return;
+  }
 
-    // 「適切なメールアドレス（deliverable かつ一定以上の confidence を持つ primary）が
-    //  見つかっていない会社」のみを score 対象とする
-    const targets = latestScans.filter((scan) => {
-      const row = hasGoodPrimaryEmailStmt.get({
-        companyId: scan.company_id,
-      }) as { 1?: number } | undefined;
-      return !row;
-    });
+  console.log(
+    `Found ${targets.length} company scan(s) without acceptable primary email candidates. Running score phase for them...`,
+  );
 
-    if (targets.length === 0) {
-      console.log(
-        "All latest company_scans already have acceptable primary email candidates. Nothing to score.",
-      );
-      return;
-    }
+  for (const scan of targets) {
+    const company = {
+      name: scan.company_name,
+      domain: scan.company_domain,
+    };
+    const department = scan.department;
 
     console.log(
-      `Found ${targets.length} company scan(s) without acceptable primary email candidates. Running score phase for them...`,
+      `\n[SCORE] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n`,
     );
 
-    for (const scan of targets) {
-      const company = {
-        name: scan.company_name,
-        domain: scan.company_domain,
-      };
-      const department = scan.department;
+    const runResult = await runCompanyScan(
+      {
+        company,
+        department,
+      },
+      deps,
+      "score",
+    );
 
-      console.log(
-        `\n[SCORE] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n`,
-      );
-
-      await runCompanyScan(
-        {
-          company,
-          department,
-        },
-        deps,
-        "score",
-      );
+    if (runResult.isErr()) {
+      console.error("Error:", runResult.error.message);
+      process.exit(1);
     }
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    console.error("Error:", message);
-    process.exit(1);
   }
 }
 
-main();
+main().catch((error) => {
+  const message =
+    error instanceof Error ? error.message : "Unknown error occurred";
+  console.error("Error:", message);
+  process.exit(1);
+});

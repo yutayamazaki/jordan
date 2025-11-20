@@ -2,6 +2,7 @@ import { EmailPattern } from "../domain/entities/emailPattern";
 import { CompanyRecord, ContactRecord, EmailCandidateRecord, EmailPatternRecord } from "../domain";
 import { ContactResponse } from "../domain/entities/contact";
 import type { ContactSearchCachesRecord } from "../domain/entities/contactSearchCaches";
+import { Result } from "neverthrow";
 
 export type EmailVerificationSource = "dns_mx" | "email_hippo";
 
@@ -68,7 +69,7 @@ export type EmailVerificationResult = {
 };
 
 export interface EmailPatternDetector {
-  detect(domain: string): Promise<EmailPattern | null>;
+  detect(domain: string): Promise<Result<EmailPattern | null, Error>>;
 }
 
 export interface ContactFinder {
@@ -76,7 +77,7 @@ export interface ContactFinder {
     companyName: string,
     domain: string,
     department: string,
-  ): Promise<ContactResponse[]>;
+  ): Promise<Result<ContactResponse[], Error>>;
 }
 
 export interface ContactSearchCachesRepository {

@@ -1,5 +1,6 @@
 import { createStructuredOutputs } from "../adapters/openai";
 import { EmailPattern, EmailPatternSchema } from "../domain/entities/emailPattern";
+import { err, ok, Result } from "neverthrow";
 
 const createEmailPatternPrompt = (domain: string) => {
   return `あなたは企業のメールアドレスパターンを分析する専門家です。
@@ -59,17 +60,21 @@ sources フィールドには、検索を行ったが有効なメールアドレ
 `;
 };
 
-export async function detectEmailPattern(domain: string): Promise<EmailPattern | null> {
-  const prompt = createEmailPatternPrompt(domain);
-  const result = await createStructuredOutputs(prompt, EmailPatternSchema, {
-    useWebSearch: true,
-    reasoningEffort: "low",
-    model: "gpt-5-nano-2025-08-07",
-  });
+export async function detectEmailPattern(domain: string): Promise<Result<EmailPattern | null, Error>> {
+  try {
+    const prompt = createEmailPatternPrompt(domain);
+    const result = await createStructuredOutputs(prompt, EmailPatternSchema, {
+      useWebSearch: true,
+      reasoningEffort: "low",
+      model: "gpt-5-nano-2025-08-07",
+    });
 
-  if (result.isErr()) {
-    throw result.error;
+    if (result.isErr()) {
+      return err(result.error);
+    }
+
+    return ok(result.value ?? null);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
-
-  return result.value ?? null;
 }

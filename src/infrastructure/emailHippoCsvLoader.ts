@@ -1,86 +1,92 @@
 import { readFileSync } from "fs";
 import { EmailVerificationResult } from "../application/ports";
+import { err, ok, Result } from "neverthrow";
 
 export function loadEmailHippoCsv(
   path: string,
-): Map<string, EmailVerificationResult> {
-  const content = readFileSync(path, "utf8");
+): Result<Map<string, EmailVerificationResult>, Error> {
+  try {
+    const content = readFileSync(path, "utf8");
 
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    const lines = content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
 
-  if (lines.length <= 1) {
-    return new Map();
-  }
-
-  const headerLine = lines[0];
-  const delimiter = headerLine.includes("\t") ? "\t" : ",";
-  const header = headerLine.split(delimiter).map((col) => col.trim());
-
-  const checkedEmailIndex = header.indexOf("CheckedEmailAddress");
-  const statusIndex = header.indexOf("Status");
-  const additionalStatusInfoIndex = header.indexOf("AdditionalStatusInfo");
-  const domainCountryCodeIndex = header.indexOf("DomainCountryCode");
-  const mailServerCountryCodeIndex = header.indexOf("MailServerCountryCode");
-
-  if (checkedEmailIndex === -1 || statusIndex === -1) {
-    throw new Error(
-      'EmailHippo CSV must include "CheckedEmailAddress" and "Status" columns',
-    );
-  }
-
-  const map = new Map<string, EmailVerificationResult>();
-
-  for (const line of lines.slice(1)) {
-    const cols = line.split(delimiter);
-    if (cols.length <= Math.max(checkedEmailIndex, statusIndex)) {
-      continue;
+    if (lines.length <= 1) {
+      return ok(new Map());
     }
 
-    const checkedEmailAddress = cols[checkedEmailIndex].trim();
-    const status = cols[statusIndex].trim();
+    const headerLine = lines[0];
+    const delimiter = headerLine.includes("\t") ? "\t" : ",";
+    const header = headerLine.split(delimiter).map((col) => col.trim());
 
-    if (!checkedEmailAddress) {
-      continue;
+    const checkedEmailIndex = header.indexOf("CheckedEmailAddress");
+    const statusIndex = header.indexOf("Status");
+    const additionalStatusInfoIndex = header.indexOf("AdditionalStatusInfo");
+    const domainCountryCodeIndex = header.indexOf("DomainCountryCode");
+    const mailServerCountryCodeIndex = header.indexOf("MailServerCountryCode");
+
+    if (checkedEmailIndex === -1 || statusIndex === -1) {
+      return err(
+        new Error(
+          'EmailHippo CSV must include "CheckedEmailAddress" and "Status" columns',
+        ),
+      );
     }
 
-    const additionalStatusInfo =
-      additionalStatusInfoIndex >= 0
-        ? cols[additionalStatusInfoIndex]?.trim() || undefined
-        : undefined;
-    const domainCountryCode =
-      domainCountryCodeIndex >= 0
-        ? cols[domainCountryCodeIndex]?.trim() || undefined
-        : undefined;
-    const mailServerCountryCode =
-      mailServerCountryCodeIndex >= 0
-        ? cols[mailServerCountryCodeIndex]?.trim() || undefined
-        : undefined;
+    const map = new Map<string, EmailVerificationResult>();
 
-    const isDeliverable = status === "Ok";
+    for (const line of lines.slice(1)) {
+      const cols = line.split(delimiter);
+      if (cols.length <= Math.max(checkedEmailIndex, statusIndex)) {
+        continue;
+      }
 
-    const reasonParts = [`EmailHippo Status=${status}`];
-    if (additionalStatusInfo) {
-      reasonParts.push(`Info=${additionalStatusInfo}`);
+      const checkedEmailAddress = cols[checkedEmailIndex].trim();
+      const status = cols[statusIndex].trim();
+
+      if (!checkedEmailAddress) {
+        continue;
+      }
+
+      const additionalStatusInfo =
+        additionalStatusInfoIndex >= 0
+          ? cols[additionalStatusInfoIndex]?.trim() || undefined
+          : undefined;
+      const domainCountryCode =
+        domainCountryCodeIndex >= 0
+          ? cols[domainCountryCodeIndex]?.trim() || undefined
+          : undefined;
+      const mailServerCountryCode =
+        mailServerCountryCodeIndex >= 0
+          ? cols[mailServerCountryCodeIndex]?.trim() || undefined
+          : undefined;
+
+      const isDeliverable = status === "Ok";
+
+      const reasonParts = [`EmailHippo Status=${status}`];
+      if (additionalStatusInfo) {
+        reasonParts.push(`Info=${additionalStatusInfo}`);
+      }
+
+      const result: EmailVerificationResult = {
+        email: checkedEmailAddress,
+        isDeliverable,
+        hasMxRecords: true,
+        reason: reasonParts.join(", "),
+        source: "email_hippo",
+        status,
+        additionalStatusInfo,
+        domainCountryCode,
+        mailServerCountryCode,
+      };
+
+      map.set(checkedEmailAddress, result);
     }
 
-    const result: EmailVerificationResult = {
-      email: checkedEmailAddress,
-      isDeliverable,
-      hasMxRecords: true,
-      reason: reasonParts.join(", "),
-      source: "email_hippo",
-      status,
-      additionalStatusInfo,
-      domainCountryCode,
-      mailServerCountryCode,
-    };
-
-    map.set(checkedEmailAddress, result);
+    return ok(map);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
-
-  return map;
 }
-

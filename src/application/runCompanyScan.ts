@@ -21,6 +21,7 @@ import {
   ContactAndEmailCandidates,
   EmailPatternDecisionResult,
 } from "./companyScanDomain";
+import { err, ok, Result } from "neverthrow";
 
 export type RunCompanyScanDependencies = {
   emailPatternDetector: EmailPatternDetector;
@@ -72,96 +73,111 @@ async function verifyEmails(
     "emailVerifier" | "emailVerificationRepository"
   >,
   maxAgeDays: number,
-): Promise<Map<string, EmailVerificationResult>> {
-  const emailVerificationEntries = await Promise.all(
-    Array.from(emails).map(async (email) => {
-      const cached = await deps.emailVerificationRepository.findRecent(
-        email,
-        maxAgeDays,
-      );
-      if (cached) {
-        return [email, cached] as const;
-      }
+): Promise<Result<Map<string, EmailVerificationResult>, Error>> {
+  try {
+    const emailVerificationEntries = await Promise.all(
+      Array.from(emails).map(async (email) => {
+        const cached = await deps.emailVerificationRepository.findRecent(
+          email,
+          maxAgeDays,
+        );
+        if (cached) {
+          return [email, cached] as const;
+        }
 
-      const fresh = await deps.emailVerifier.verify(email);
-      const isHippoApiError =
-        fresh.source === "email_hippo" &&
-        fresh.reason?.startsWith("EmailHippo API call failed:");
+        const fresh = await deps.emailVerifier.verify(email);
+        const isHippoApiError =
+          fresh.source === "email_hippo" &&
+          fresh.reason?.startsWith("EmailHippo API call failed:");
 
-      if (!isHippoApiError) {
-        await deps.emailVerificationRepository.save(fresh);
-      }
-      return [email, fresh] as const;
-    }),
-  );
+        if (!isHippoApiError) {
+          await deps.emailVerificationRepository.save(fresh);
+        }
+        return [email, fresh] as const;
+      }),
+    );
 
-  return new Map<string, EmailVerificationResult>(
-    emailVerificationEntries.map(([email, result]) => [email, result]),
-  );
+    return ok(
+      new Map<string, EmailVerificationResult>(
+        emailVerificationEntries.map(([email, result]) => [email, result]),
+      ),
+    );
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 export async function collectCompanyScan(
   options: CompanyScanOptions,
   deps: RunCompanyScanWithStoreDependencies,
-): Promise<CompanyScanRawData> {
-  const { company, department } = options;
+): Promise<Result<CompanyScanRawData, Error>> {
+  try {
+    const { company, department } = options;
 
-  const companyId = deps.idGenerator.generate();
+    const companyId = deps.idGenerator.generate();
 
-  const MAX_PATTERN_AGE_DAYS = 365;
-  const learnedPatternRecord =
-    await deps.emailPatternRepository.findRecentByDomain(
+    const MAX_PATTERN_AGE_DAYS = 365;
+    const learnedPatternRecord =
+      await deps.emailPatternRepository.findRecentByDomain(
+        company.domain,
+        MAX_PATTERN_AGE_DAYS,
+      );
+
+    let detectedEmailPattern: EmailPattern | null = null;
+
+    if (learnedPatternRecord) {
+      console.log(
+        "\nUse learned email pattern from repository (skip web detection) ...",
+      );
+    } else {
+      const detectedEmailPatternResult = await deps.emailPatternDetector.detect(
+        company.domain,
+      );
+      if (detectedEmailPatternResult.isErr()) {
+        return err(detectedEmailPatternResult.error);
+      }
+      detectedEmailPattern = detectedEmailPatternResult.value;
+    }
+
+    const patternDecision = decideEmailPattern(
+      companyId,
+      {
+        detectedEmailPattern,
+        learnedPattern: learnedPatternRecord
+          ? {
+              pattern: learnedPatternRecord.pattern,
+              reason: learnedPatternRecord.reason,
+            }
+          : null,
+      },
+      deps.idGenerator,
+    );
+    patternDecision.logMessages.forEach((message) => console.log(message));
+
+    const contactsResult = await deps.contactFinder.searchContacts(
+      company.name,
       company.domain,
-      MAX_PATTERN_AGE_DAYS,
+      department,
     );
 
-  let detectedEmailPattern: EmailPattern | null = null;
-  let emailPattern: EmailPattern["pattern"];
+    if (contactsResult.isErr()) {
+      return err(contactsResult.error);
+    }
 
-  if (learnedPatternRecord) {
-    console.log(
-      "\nUse learned email pattern from repository (skip web detection) ...",
-    );
-  } else {
-    detectedEmailPattern = await deps.emailPatternDetector.detect(
-      company.domain,
-    );
+    const raw: CompanyScanRawData = {
+      companyId,
+      company,
+      department,
+      patternDecision,
+      contacts: contactsResult.value,
+    };
+
+    await deps.rawStore.save(raw);
+
+    return ok(raw);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
-
-  const patternDecision = decideEmailPattern(
-    companyId,
-    {
-      detectedEmailPattern,
-      learnedPattern: learnedPatternRecord
-        ? {
-            pattern: learnedPatternRecord.pattern,
-            reason: learnedPatternRecord.reason,
-          }
-        : null,
-    },
-    deps.idGenerator,
-  );
-  emailPattern = patternDecision.pattern;
-
-  patternDecision.logMessages.forEach((message) => console.log(message));
-
-  const contacts = await deps.contactFinder.searchContacts(
-    company.name,
-    company.domain,
-    department,
-  );
-
-  const raw: CompanyScanRawData = {
-    companyId,
-    company,
-    department,
-    patternDecision,
-    contacts,
-  };
-
-  await deps.rawStore.save(raw);
-
-  return raw;
 }
 
 export async function scoreCompanyScan(
@@ -174,109 +190,125 @@ export async function scoreCompanyScan(
     | "emailPatternRepository"
     | "idGenerator"
   >,
-): Promise<void> {
-  const candidates: ContactAndEmailCandidates[] =
-    createContactAndEmailCandidates(
-      raw.contacts,
-      raw.company.domain,
-      raw.patternDecision.pattern,
-    );
+): Promise<Result<void, Error>> {
+  try {
+    const candidates: ContactAndEmailCandidates[] =
+      createContactAndEmailCandidates(
+        raw.contacts,
+        raw.company.domain,
+        raw.patternDecision.pattern,
+      );
 
-  const MAX_AGE_DAYS = 180;
+    const MAX_AGE_DAYS = 180;
 
-  const primaryEmails = new Set<string>();
-  const alternativeEmails = new Set<string>();
-  candidates.forEach((candidate) => {
-    primaryEmails.add(candidate.primaryEmail.value);
-    candidate.alternativeEmails.forEach((alt) => {
-      alternativeEmails.add(alt.value);
-    });
-  });
-
-  const primaryVerificationMap = await verifyEmails(
-    primaryEmails,
-    deps,
-    MAX_AGE_DAYS,
-  );
-
-  const hasDeliverablePrimary = candidates.some((candidate) => {
-    const verification = primaryVerificationMap.get(
-      candidate.primaryEmail.value,
-    );
-    return verification?.isDeliverable === true;
-  });
-
-  let emailVerificationMap: Map<string, EmailVerificationResult>;
-
-  if (hasDeliverablePrimary) {
-    emailVerificationMap = primaryVerificationMap;
-  } else {
-    const remainingAlternativeEmails = new Set<string>();
-    alternativeEmails.forEach((email) => {
-      if (!primaryVerificationMap.has(email)) {
-        remainingAlternativeEmails.add(email);
-      }
+    const primaryEmails = new Set<string>();
+    const alternativeEmails = new Set<string>();
+    candidates.forEach((candidate) => {
+      primaryEmails.add(candidate.primaryEmail.value);
+      candidate.alternativeEmails.forEach((alt) => {
+        alternativeEmails.add(alt.value);
+      });
     });
 
-    const alternativeVerificationMap = await verifyEmails(
-      remainingAlternativeEmails,
+    const primaryVerificationMapResult = await verifyEmails(
+      primaryEmails,
       deps,
       MAX_AGE_DAYS,
     );
 
-    emailVerificationMap = new Map<string, EmailVerificationResult>([
-      ...primaryVerificationMap,
-      ...alternativeVerificationMap,
-    ]);
-  }
+    if (primaryVerificationMapResult.isErr()) {
+      return err(primaryVerificationMapResult.error);
+    }
 
-  const {
-    companyRecords,
-    contactRecords,
-    emailCandidateRecords,
-  } = buildCompanyDomainEntities(
-    raw.companyId,
-    raw.company,
-    raw.contacts,
-    candidates,
-    raw.patternDecision.pattern,
-    emailVerificationMap,
-  );
+    const primaryVerificationMap = primaryVerificationMapResult.value;
 
-  // EmailHippo の結果を元に EmailPattern を学習・更新
-  const totalForPattern = emailCandidateRecords.filter(
-    (r) => r.pattern === raw.patternDecision.pattern,
-  ).length;
-  const deliverableForPattern = emailCandidateRecords.filter(
-    (r) =>
-      r.pattern === raw.patternDecision.pattern && r.isDeliverable === true,
-  );
-
-  // 先に会社・担当者・メール候補を保存してからパターンを保存する
-  await deps.leadExporter.export(
-    raw.company.domain,
-    companyRecords,
-    contactRecords,
-    emailCandidateRecords,
-    raw.patternDecision.record,
-  );
-
-  if (totalForPattern > 0) {
-    const sampleEmail = deliverableForPattern[0]?.email;
-    const patternRecord: EmailPatternRecord = EmailPatternRecordSchema.parse({
-      id: deps.idGenerator.generate(),
-      companyId: raw.companyId,
-      pattern: raw.patternDecision.pattern,
-      reason: `Learned from EmailHippo results: ${deliverableForPattern.length}/${totalForPattern} deliverable`,
-      domain: raw.company.domain,
-      source: "email_hippo",
-      sampleEmail,
-      verifiedAt: new Date().toISOString(),
-      successCount: deliverableForPattern.length,
-      totalCount: totalForPattern,
+    const hasDeliverablePrimary = candidates.some((candidate) => {
+      const verification = primaryVerificationMap.get(
+        candidate.primaryEmail.value,
+      );
+      return verification?.isDeliverable === true;
     });
 
-    await deps.emailPatternRepository.save(patternRecord);
+    let emailVerificationMap: Map<string, EmailVerificationResult>;
+
+    if (hasDeliverablePrimary) {
+      emailVerificationMap = primaryVerificationMap;
+    } else {
+      const remainingAlternativeEmails = new Set<string>();
+      alternativeEmails.forEach((email) => {
+        if (!primaryVerificationMap.has(email)) {
+          remainingAlternativeEmails.add(email);
+        }
+      });
+
+      const alternativeVerificationMapResult = await verifyEmails(
+        remainingAlternativeEmails,
+        deps,
+        MAX_AGE_DAYS,
+      );
+
+      if (alternativeVerificationMapResult.isErr()) {
+        return err(alternativeVerificationMapResult.error);
+      }
+
+      emailVerificationMap = new Map<string, EmailVerificationResult>([
+        ...primaryVerificationMap,
+        ...alternativeVerificationMapResult.value,
+      ]);
+    }
+
+    const {
+      companyRecords,
+      contactRecords,
+      emailCandidateRecords,
+    } = buildCompanyDomainEntities(
+      raw.companyId,
+      raw.company,
+      raw.contacts,
+      candidates,
+      raw.patternDecision.pattern,
+      emailVerificationMap,
+    );
+
+    // EmailHippo の結果を元に EmailPattern を学習・更新
+    const totalForPattern = emailCandidateRecords.filter(
+      (r) => r.pattern === raw.patternDecision.pattern,
+    ).length;
+    const deliverableForPattern = emailCandidateRecords.filter(
+      (r) =>
+        r.pattern === raw.patternDecision.pattern && r.isDeliverable === true,
+    );
+
+    // 先に会社・担当者・メール候補を保存してからパターンを保存する
+    await deps.leadExporter.export(
+      raw.company.domain,
+      companyRecords,
+      contactRecords,
+      emailCandidateRecords,
+      raw.patternDecision.record,
+    );
+
+    if (totalForPattern > 0) {
+      const sampleEmail = deliverableForPattern[0]?.email;
+      const patternRecord: EmailPatternRecord = EmailPatternRecordSchema.parse({
+        id: deps.idGenerator.generate(),
+        companyId: raw.companyId,
+        pattern: raw.patternDecision.pattern,
+        reason: `Learned from EmailHippo results: ${deliverableForPattern.length}/${totalForPattern} deliverable`,
+        domain: raw.company.domain,
+        source: "email_hippo",
+        sampleEmail,
+        verifiedAt: new Date().toISOString(),
+        successCount: deliverableForPattern.length,
+        totalCount: totalForPattern,
+      });
+
+      await deps.emailPatternRepository.save(patternRecord);
+    }
+
+    return ok(undefined);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
@@ -290,38 +322,51 @@ export async function scoreCompanyScanFromStored(
     emailPatternRepository: EmailPatternRepository;
     idGenerator: IdGenerator;
   },
-): Promise<void> {
-  const { company, department } = options;
+): Promise<Result<void, Error>> {
+  try {
+    const { company, department } = options;
 
-  const raw = await deps.rawStore.load(company.domain, department);
-  if (!raw) {
-    return;
+    const raw = await deps.rawStore.load(company.domain, department);
+    if (!raw) {
+      return ok(undefined);
+    }
+
+    const scoreResult = await scoreCompanyScan(
+      raw,
+      {
+        leadExporter: deps.leadExporter,
+        emailVerifier: deps.emailVerifier,
+        emailVerificationRepository: deps.emailVerificationRepository,
+        emailPatternRepository: deps.emailPatternRepository,
+        idGenerator: deps.idGenerator,
+      },
+    );
+
+    if (scoreResult.isErr()) {
+      return err(scoreResult.error);
+    }
+
+    return ok(undefined);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
-
-  await scoreCompanyScan(
-    raw,
-    {
-      leadExporter: deps.leadExporter,
-      emailVerifier: deps.emailVerifier,
-      emailVerificationRepository: deps.emailVerificationRepository,
-      emailPatternRepository: deps.emailPatternRepository,
-      idGenerator: deps.idGenerator,
-    },
-  );
 }
 
 export async function runCompanyScan(
   options: CompanyScanOptions,
   deps: RunCompanyScanWithStoreDependencies,
   phase: CompanyScanPhase = "all",
-): Promise<void> {
+): Promise<Result<void, Error>> {
   if (phase === "collect") {
-    await collectCompanyScan(options, deps);
-    return;
+    const collectResult = await collectCompanyScan(options, deps);
+    if (collectResult.isErr()) {
+      return err(collectResult.error);
+    }
+    return ok(undefined);
   }
 
   if (phase === "score") {
-    await scoreCompanyScanFromStored(
+    const scoreResult = await scoreCompanyScanFromStored(
       options,
       {
         rawStore: deps.rawStore,
@@ -332,12 +377,19 @@ export async function runCompanyScan(
         idGenerator: deps.idGenerator,
       },
     );
-    return;
+    if (scoreResult.isErr()) {
+      return err(scoreResult.error);
+    }
+    return ok(undefined);
   }
 
-  const raw = await collectCompanyScan(options, deps);
-  await scoreCompanyScan(
-    raw,
+  const rawResult = await collectCompanyScan(options, deps);
+  if (rawResult.isErr()) {
+    return err(rawResult.error);
+  }
+
+  const scoreResult = await scoreCompanyScan(
+    rawResult.value,
     {
       leadExporter: deps.leadExporter,
       emailVerifier: deps.emailVerifier,
@@ -346,4 +398,10 @@ export async function runCompanyScan(
       idGenerator: deps.idGenerator,
     },
   );
+
+  if (scoreResult.isErr()) {
+    return err(scoreResult.error);
+  }
+
+  return ok(undefined);
 }

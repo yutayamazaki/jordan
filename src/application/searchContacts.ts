@@ -3,6 +3,7 @@ import { ContactListResponseSchema, ContactResponse } from "../domain/entities/c
 import { getDepartmentCategorySearchInfo } from "./departmentClassifier";
 import { ContactSearchCachesRepository } from "./ports";
 import { randomUUID } from "crypto";
+import { err, ok, Result } from "neverthrow";
 
 const createContactSearchPrompt = (name: string, domain: string, department: string) => {
   const trimmedDepartment = department.trim();
@@ -108,17 +109,21 @@ async function searchContactsWithLLM(
   name: string,
   domain: string,
   department: string,
-): Promise<ContactResponse[]> {
-  const contactSearchPrompt = createContactSearchPrompt(name, domain, department);
-  const result = await createStructuredOutputs(contactSearchPrompt, ContactListResponseSchema, {
-    useWebSearch: true,
-    reasoningEffort: "medium",
-    model: "gpt-5-mini-2025-08-07",
-  });
-  if (result.isErr()) {
-    throw result.error;
+): Promise<Result<ContactResponse[], Error>> {
+  try {
+    const contactSearchPrompt = createContactSearchPrompt(name, domain, department);
+    const result = await createStructuredOutputs(contactSearchPrompt, ContactListResponseSchema, {
+      useWebSearch: true,
+      reasoningEffort: "medium",
+      model: "gpt-5-mini-2025-08-07",
+    });
+    if (result.isErr()) {
+      return err(result.error);
+    }
+    return ok(result.value.contacts);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
-  return result.value.contacts;
 }
 
 const CONTACT_SEARCH_MAX_AGE_DAYS = 90;
@@ -128,30 +133,38 @@ export async function searchContacts(
   domain: string,
   department: string,
   contactSearchCachesRepository?: ContactSearchCachesRepository,
-): Promise<ContactResponse[]> {
-  if (contactSearchCachesRepository) {
-    const cached = await contactSearchCachesRepository.findRecent(
-      domain,
-      department,
-      CONTACT_SEARCH_MAX_AGE_DAYS,
-    );
-    if (cached) {
-      return cached.contacts;
+): Promise<Result<ContactResponse[], Error>> {
+  try {
+    if (contactSearchCachesRepository) {
+      const cached = await contactSearchCachesRepository.findRecent(
+        domain,
+        department,
+        CONTACT_SEARCH_MAX_AGE_DAYS,
+      );
+      if (cached) {
+        return ok(cached.contacts);
+      }
     }
+
+    const contactsResult = await searchContactsWithLLM(name, domain, department);
+
+    if (contactsResult.isErr()) {
+      return err(contactsResult.error);
+    }
+
+    if (contactSearchCachesRepository) {
+      await contactSearchCachesRepository.save({
+        id: randomUUID(),
+        domain,
+        department,
+        companyName: name,
+        contacts: contactsResult.value,
+        searchedAt: new Date().toISOString(),
+      });
+    }
+
+    return ok(contactsResult.value);
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
   }
-
-  const contacts = await searchContactsWithLLM(name, domain, department);
-
-  if (contactSearchCachesRepository) {
-    await contactSearchCachesRepository.save({
-      id: randomUUID(),
-      domain,
-      department,
-      companyName: name,
-      contacts,
-      searchedAt: new Date().toISOString(),
-    });
-  }
-
-  return contacts;
 }

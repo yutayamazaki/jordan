@@ -3,75 +3,105 @@ import { parseCliArgs } from "./cli/parseCliArgs";
 import { loadCompaniesFromCsv } from "./cli/loadCompaniesFromCsv";
 import { runCompanyScan } from "./application/runCompanyScan";
 import { createRunCompanyScanDeps } from "./bootstrap/deps";
+import { err, ok, Result } from "neverthrow";
 
 async function main() {
-  try {
-    const options = parseCliArgs("collect");
-    const deps = createRunCompanyScanDeps();
+  const optionsResult = parseCliArgs("collect");
+  if (optionsResult.isErr()) {
+    console.error("Error:", optionsResult.error.message);
+    process.exit(1);
+  }
+  const options = optionsResult.value;
 
-    const onExists = options.onExists ?? "skip";
+  const depsResult = createRunCompanyScanDeps();
+  if (depsResult.isErr()) {
+    console.error("Error:", depsResult.error.message);
+    process.exit(1);
+  }
+  const deps = depsResult.value;
 
-    const companies = loadCompaniesFromCsv(options.csvPath);
+  const onExists = options.onExists ?? "skip";
 
-    if (companies.length === 0) {
-      console.log("No companies found in CSV.");
-      return;
-    }
+  const companiesResult = loadCompaniesFromCsv(options.csvPath);
+  if (companiesResult.isErr()) {
+    console.error("Error:", companiesResult.error.message);
+    process.exit(1);
+  }
 
-    const maxConcurrencyFromEnv = process.env.COLLECT_CONCURRENCY;
-    const maxConcurrency =
-      maxConcurrencyFromEnv !== undefined
-        ? Number(maxConcurrencyFromEnv)
-        : 10;
+  const companies = companiesResult.value;
 
-    const concurrency =
-      Number.isFinite(maxConcurrency) && maxConcurrency > 0
-        ? maxConcurrency
-        : 10;
+  if (companies.length === 0) {
+    console.log("No companies found in CSV.");
+    return;
+  }
 
-    const queue = [...companies];
+  const maxConcurrencyFromEnv = process.env.COLLECT_CONCURRENCY;
+  const maxConcurrency =
+    maxConcurrencyFromEnv !== undefined
+      ? Number(maxConcurrencyFromEnv)
+      : 10;
 
-    async function worker() {
-      for (;;) {
-        const next = queue.shift();
-        if (!next) {
-          break;
-        }
+  const concurrency =
+    Number.isFinite(maxConcurrency) && maxConcurrency > 0
+      ? maxConcurrency
+      : 10;
 
-        const { company, department } = next;
+  const queue = [...companies];
 
-        const existing = await deps.rawStore.load(company.domain, department);
+  async function worker(): Promise<Result<void, Error>> {
+    for (;;) {
+      const next = queue.shift();
+      if (!next) {
+        break;
+      }
 
-        if (existing && onExists === "skip") {
-          console.log(
-            `\n[COLLECT] Skipped company: ${company.name} (${company.domain}) / Department: ${department} (existing scan found)\n`,
-          );
-          continue;
-        }
+      const { company, department } = next;
 
+      const existing = await deps.rawStore.load(company.domain, department);
+
+      if (existing && onExists === "skip") {
         console.log(
-          `\n[COLLECT] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n`,
+          `\n[COLLECT] Skipped company: ${company.name} (${company.domain}) / Department: ${department} (existing scan found)\n`,
         );
+        continue;
+      }
 
-        await runCompanyScan(
-          {
-            company,
-            department,
-          },
-          deps,
-          "collect",
-        );
+      console.log(
+        `\n[COLLECT] Processing company: ${company.name} (${company.domain}) / Department: ${department}\n`,
+      );
+
+      const scanResult = await runCompanyScan(
+        {
+          company,
+          department,
+        },
+        deps,
+        "collect",
+      );
+
+      if (scanResult.isErr()) {
+        return err(scanResult.error);
       }
     }
 
-    const workerCount = Math.min(concurrency, companies.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error occurred";
-    console.error("Error:", message);
+    return ok(undefined);
+  }
+
+  const workerCount = Math.min(concurrency, companies.length);
+  const workerResults = await Promise.all(
+    Array.from({ length: workerCount }, () => worker()),
+  );
+
+  const failed = workerResults.find((result) => result.isErr());
+  if (failed?.isErr()) {
+    console.error("Error:", failed.error.message);
     process.exit(1);
   }
 }
 
-main();
+main().catch((error) => {
+  const message =
+    error instanceof Error ? error.message : "Unknown error occurred";
+  console.error("Error:", message);
+  process.exit(1);
+});

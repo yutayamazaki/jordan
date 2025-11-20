@@ -3,6 +3,7 @@ import {
   EmailVerificationResult,
 } from "../application/ports";
 import https from "https";
+import { err, ok, Result } from "neverthrow";
 
 function fetchJson(url: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -83,14 +84,20 @@ type EmailHippoApiResponse = {
 export class EmailHippoApiEmailVerifier implements EmailVerifier {
   private readonly apiKey: string;
 
-  constructor(apiKeyFromEnv?: string) {
+  private constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  static create(apiKeyFromEnv?: string): Result<EmailHippoApiEmailVerifier, Error> {
     const key = apiKeyFromEnv ?? process.env.EMAIL_HIPPO_API_KEY;
     if (!key) {
-      throw new Error(
-        "EMAIL_HIPPO_API_KEY is not set. Please configure your EmailHippo API key.",
+      return err(
+        new Error(
+          "EMAIL_HIPPO_API_KEY is not set. Please configure your EmailHippo API key.",
+        ),
       );
     }
-    this.apiKey = key;
+    return ok(new EmailHippoApiEmailVerifier(key));
   }
 
   async verify(email: string): Promise<EmailVerificationResult> {
@@ -199,4 +206,3 @@ export class EmailHippoApiEmailVerifier implements EmailVerifier {
     return result;
   }
 }
-

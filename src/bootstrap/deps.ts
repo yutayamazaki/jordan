@@ -8,19 +8,24 @@ import { SqliteCompanyScanRawStore } from "../infrastructure/sqliteCompanyScanRa
 import { SqliteEmailPatternRepository } from "../infrastructure/sqliteEmailPatternRepository";
 import { SqliteContactSearchCachesRepository } from "../infrastructure/sqliteContactSearchCachesRepository";
 import { RunCompanyScanWithStoreDependencies } from "../application/runCompanyScan";
+import { err, ok, Result } from "neverthrow";
 
-export function createRunCompanyScanDeps(): RunCompanyScanWithStoreDependencies {
+export function createRunCompanyScanDeps(): Result<RunCompanyScanWithStoreDependencies, Error> {
   const emailPatternDetector = new LlmEmailPatternDetector();
   const contactSearchCachesRepository = new SqliteContactSearchCachesRepository();
   const contactFinder = new LlmContactFinder(contactSearchCachesRepository);
   const leadExporter = new SqliteLeadExporter();
   const idGenerator = new UuidGenerator();
-  const emailVerifier = new EmailHippoApiEmailVerifier();
+  const emailVerifierResult = EmailHippoApiEmailVerifier.create();
+  if (emailVerifierResult.isErr()) {
+    return err(emailVerifierResult.error);
+  }
+  const emailVerifier = emailVerifierResult.value;
   const emailVerificationRepository = new SqliteEmailVerificationRepository();
   const rawStore = new SqliteCompanyScanRawStore();
   const emailPatternRepository = new SqliteEmailPatternRepository();
 
-  return {
+  return ok({
     emailPatternDetector,
     contactFinder,
     emailVerifier,
@@ -29,5 +34,5 @@ export function createRunCompanyScanDeps(): RunCompanyScanWithStoreDependencies 
     emailVerificationRepository,
     rawStore,
     emailPatternRepository,
-  };
+  });
 }
