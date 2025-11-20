@@ -22,12 +22,12 @@ async function main() {
     const maxConcurrency =
       maxConcurrencyFromEnv !== undefined
         ? Number(maxConcurrencyFromEnv)
-        : 5;
+        : 10;
 
     const concurrency =
       Number.isFinite(maxConcurrency) && maxConcurrency > 0
         ? maxConcurrency
-        : 5;
+        : 10;
 
     const queue = [...companies];
 
