@@ -65,6 +65,41 @@ export type RunCompanyScanWithStoreDependencies = RunCompanyScanDependencies & {
   rawStore: CompanyScanRawStore;
 };
 
+async function verifyEmails(
+  emails: Set<string>,
+  deps: Pick<
+    RunCompanyScanDependencies,
+    "emailVerifier" | "emailVerificationRepository"
+  >,
+  maxAgeDays: number,
+): Promise<Map<string, EmailVerificationResult>> {
+  const emailVerificationEntries = await Promise.all(
+    Array.from(emails).map(async (email) => {
+      const cached = await deps.emailVerificationRepository.findRecent(
+        email,
+        maxAgeDays,
+      );
+      if (cached) {
+        return [email, cached] as const;
+      }
+
+      const fresh = await deps.emailVerifier.verify(email);
+      const isHippoApiError =
+        fresh.source === "email_hippo" &&
+        fresh.reason?.startsWith("EmailHippo API call failed:");
+
+      if (!isHippoApiError) {
+        await deps.emailVerificationRepository.save(fresh);
+      }
+      return [email, fresh] as const;
+    }),
+  );
+
+  return new Map<string, EmailVerificationResult>(
+    emailVerificationEntries.map(([email, result]) => [email, result]),
+  );
+}
+
 export async function collectCompanyScan(
   options: CompanyScanOptions,
   deps: RunCompanyScanWithStoreDependencies,
@@ -145,8 +180,6 @@ export async function scoreCompanyScan(
 ): Promise<void> {
   console.log("\n👺 Convert to DB table records ...");
 
-  console.log("\n👺 Generate email candidates from contacts ...");
-
   const candidates: ContactAndEmailCandidates[] =
     createContactAndEmailCandidates(
       raw.contacts,
@@ -154,45 +187,53 @@ export async function scoreCompanyScan(
       raw.patternDecision.pattern,
     );
 
-  console.log("\n👺 Verify email deliverability with EmailHippo ...");
-
-  const allEmails = new Set<string>();
-  candidates.forEach((candidate) => {
-    allEmails.add(candidate.primaryEmail.value);
-    candidate.alternativeEmails.forEach((alt) => allEmails.add(alt.value));
-  });
-
   const MAX_AGE_DAYS = 180;
 
-  const emailVerificationEntries = await Promise.all(
-    Array.from(allEmails).map(async (email) => {
-      const cached = await deps.emailVerificationRepository.findRecent(
-        email,
-        MAX_AGE_DAYS,
-      );
-      if (cached) {
-        console.log(
-          `Using cached EmailHippo verification result (within ${MAX_AGE_DAYS} days):`,
-          email,
-        );
-        return [email, cached] as const;
-      }
+  const primaryEmails = new Set<string>();
+  const alternativeEmails = new Set<string>();
+  candidates.forEach((candidate) => {
+    primaryEmails.add(candidate.primaryEmail.value);
+    candidate.alternativeEmails.forEach((alt) => {
+      alternativeEmails.add(alt.value);
+    });
+  });
 
-      const fresh = await deps.emailVerifier.verify(email);
-      const isHippoApiError =
-        fresh.source === "email_hippo" &&
-        fresh.reason?.startsWith("EmailHippo API call failed:");
-
-      if (!isHippoApiError) {
-        await deps.emailVerificationRepository.save(fresh);
-      }
-      return [email, fresh] as const;
-    }),
+  const primaryVerificationMap = await verifyEmails(
+    primaryEmails,
+    deps,
+    MAX_AGE_DAYS,
   );
 
-  const emailVerificationMap = new Map<string, EmailVerificationResult>(
-    emailVerificationEntries.map(([email, result]) => [email, result]),
-  );
+  const hasDeliverablePrimary = candidates.some((candidate) => {
+    const verification = primaryVerificationMap.get(
+      candidate.primaryEmail.value,
+    );
+    return verification?.isDeliverable === true;
+  });
+
+  let emailVerificationMap: Map<string, EmailVerificationResult>;
+
+  if (hasDeliverablePrimary) {
+    emailVerificationMap = primaryVerificationMap;
+  } else {
+    const remainingAlternativeEmails = new Set<string>();
+    alternativeEmails.forEach((email) => {
+      if (!primaryVerificationMap.has(email)) {
+        remainingAlternativeEmails.add(email);
+      }
+    });
+
+    const alternativeVerificationMap = await verifyEmails(
+      remainingAlternativeEmails,
+      deps,
+      MAX_AGE_DAYS,
+    );
+
+    emailVerificationMap = new Map<string, EmailVerificationResult>([
+      ...primaryVerificationMap,
+      ...alternativeVerificationMap,
+    ]);
+  }
 
   const {
     companyRecords,
@@ -263,9 +304,6 @@ export async function scoreCompanyScanFromStored(
 
   const raw = await deps.rawStore.load(company.domain, department);
   if (!raw) {
-    console.log(
-      "No stored scan data found. Please run with phase=collect or phase=all first.",
-    );
     return;
   }
 

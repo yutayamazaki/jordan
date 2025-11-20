@@ -137,9 +137,6 @@ export async function searchContacts(
       CONTACT_SEARCH_MAX_AGE_DAYS,
     );
     if (cached) {
-      console.log(
-        `Using cached contact search result for domain=${domain}, department=${department}`,
-      );
       return cached.contacts;
     }
   }
