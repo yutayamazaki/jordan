@@ -54,6 +54,17 @@ export type CompanyScanRawData = {
   contacts: ContactResponse[];
 };
 
+const EXCLUDED_POSITIONS = [
+  "代表取締役",
+  "代表取締役社長",
+  "会長",
+  "取締役会長",
+  "代表取締役会長",
+  "取締役副会長",
+  "副会長",
+  "ceo",
+];
+
 export interface CompanyScanRawStore {
   save(raw: CompanyScanRawData): Promise<void>;
   load(
@@ -156,6 +167,13 @@ export async function collectCompanyScan(
       return err(contactsResult.error);
     }
 
+    const contacts = contactsResult.value.filter((contact) => {
+      const normalizedPosition = contact.position.replace(/\s+/g, "").toLowerCase();
+      return !EXCLUDED_POSITIONS.some((keyword) =>
+        normalizedPosition.includes(keyword),
+      );
+    });
+
     const patternDecision = decideEmailPattern(
       companyId,
       {
@@ -175,7 +193,7 @@ export async function collectCompanyScan(
       company,
       department,
       patternDecision,
-      contacts: contactsResult.value,
+      contacts,
     };
 
     await deps.rawStore.save(raw);
