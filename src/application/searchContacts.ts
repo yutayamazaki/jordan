@@ -20,9 +20,7 @@ const createContactSearchPrompt = (name: string, domain: string, department: str
 - 部署カテゴリ: ${categoryInfo.category}
 - 類似部署キーワードの例: ${categoryInfo.relatedKeywords.join(" / ")}
 
-上記の部署カテゴリに属すると考えられる部署（例: ${categoryInfo.relatedKeywords.join(
-        "、",
-      )} など）の担当者も、同じカテゴリの候補として積極的に抽出してください。
+上記の部署カテゴリに属すると考えられる部署の担当者も、同じカテゴリの候補として積極的に抽出してください。
 `
       : "";
 
@@ -65,8 +63,8 @@ ${categoryDescription}
    - 顧客企業側の担当者が事例インタビュー等に記載されている場合も候補に含めてよい
 
 3. 部署指定がある場合（上記の「部署」情報が空でない場合）は、
-   その部署と関連がありそうな人物（同じ部門名や、近い業務領域の役職）や、
-   上記の「部署カテゴリ」に含まれると考えられる部署名を持つ人物を優先的に抽出してください。
+   - その部署と関連がありそうな人物（同じ部門名や、近い業務領域の役職）や、
+   - 上記の「部署カテゴリ」に含まれると考えられる部署名を持つ人物を優先的に抽出してください。
 
 4. 以下のような人物は除外してください。
    - 就活生や応募者、インターン応募者など、従業員・役員ではない人物
@@ -115,7 +113,7 @@ async function searchContactsWithLLM(
     const contactSearchPrompt = createContactSearchPrompt(name, domain, department);
     const result = await createStructuredOutputs(contactSearchPrompt, ContactListResponseSchema, {
       useWebSearch: true,
-      reasoningEffort: "medium",
+      reasoningEffort: "low",
       model: "gpt-5-mini-2025-08-07",
     });
     if (result.isErr()) {
