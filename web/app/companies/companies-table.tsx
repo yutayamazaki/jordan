@@ -372,12 +372,15 @@ export function CompaniesTable({
                       <p className="text-base font-semibold text-slate-900">
                         {detail.name}
                       </p>
-                      {detail.description && (
-                        <p className="mt-1 text-sm text-slate-700">
-                          {detail.description}
-                        </p>
-                      )}
                     </div>
+                  </section>
+                  <section className="mt-4">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                      会社概要
+                    </p>
+                    <p className="mt-1 text-xs leading-6 text-slate-800">
+                      {detail.description?.trim() ? detail.description : "記載なし"}
+                    </p>
                   </section>
                   <section className="grid grid-cols-2 gap-2 text-sm text-slate-700">
                     <div className="col-span-2">

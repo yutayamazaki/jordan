@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Optional
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -33,15 +35,6 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="水産・農林業",
         keywords=(
-            "fishing",
-            "fishery",
-            "seafood",
-            "aquaculture",
-            "farm",
-            "farming",
-            "agriculture",
-            "agri",
-            "forestry",
             "木材",
             "林業",
             "農業",
@@ -51,14 +44,6 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="鉱業",
         keywords=(
-            "mining",
-            "mine",
-            "minerals",
-            "ore",
-            "coal",
-            "lithium",
-            "gold",
-            "copper",
             "採掘",
             "鉱山",
         ),
@@ -66,43 +51,36 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="建設業",
         keywords=(
-            "construction",
-            "building",
-            "contractor",
-            "civil",
-            "architecture",
-            "architect",
             "施工",
             "建設",
             "工務店",
             "ゼネコン",
+            "建築",
+            "土木工事",
+            "リフォーム",
+            "設備工事",
+            "電気工事",
+            "解体工事",
+            "リノベーション",
+            "内装工事",
+            "外壁工事",
         ),
     ),
     IndustryRule(
         label="食料品",
         keywords=(
-            "food",
-            "beverage",
-            "drink",
             "食品",
             "飲料",
             "加工",
-            "snack",
-            "grocery",
-            "meat",
-            "dairy",
-            "bread",
+            "外食",
+            "飲食店",
+            "レストラン",
+            "カフェ",
         ),
     ),
     IndustryRule(
         label="繊維製品",
         keywords=(
-            "textile",
-            "apparel",
-            "clothing",
-            "garment",
-            "fabric",
-            "fiber",
             "繊維",
             "衣料",
             "アパレル",
@@ -110,14 +88,11 @@ RULES: tuple[IndustryRule, ...] = (
     ),
     IndustryRule(
         label="パルプ・紙",
-        keywords=("pulp", "paper", "printing", "papermill", "製紙", "紙"),
+        keywords=("製紙", "紙"),
     ),
     IndustryRule(
         label="化学",
         keywords=(
-            "chemical",
-            "chem",
-            "chemistry",
             "材料",
             "ケミカル",
             "化学",
@@ -129,11 +104,6 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="医薬品",
         keywords=(
-            "pharma",
-            "pharmaceutical",
-            "drug",
-            "medicine",
-            "medication",
             "製薬",
             "医薬",
             "ワクチン",
@@ -142,9 +112,7 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="石油・石炭製品",
         keywords=(
-            "petroleum",
             "oil",
-            "gasoline",
             "fuel",
             "refinery",
             "石油",
@@ -191,8 +159,6 @@ RULES: tuple[IndustryRule, ...] = (
         label="金属製品",
         keywords=(
             "metal",
-            "metalwork",
-            "fabrication",
             "加工",
             "金属製品",
             "鋳造",
@@ -202,7 +168,14 @@ RULES: tuple[IndustryRule, ...] = (
     ),
     IndustryRule(
         label="機械",
-        keywords=("machinery", "machine", "equipment", "industrial machinery", "装置", "機械"),
+        keywords=(
+            "machinery",
+            "industrial machinery",
+            "装置",
+            "機械",
+            "製造装置",
+            "工作機械",
+        ),
     ),
     IndustryRule(
         label="電気機器",
@@ -247,16 +220,20 @@ RULES: tuple[IndustryRule, ...] = (
     ),
     IndustryRule(
         label="その他製品",
-        keywords=("consumer goods", "goods", "product", "製品", "雑貨", "日用品"),
+        keywords=(
+            "製品",
+            "雑貨",
+            "日用品",
+            "oem",
+            "odm",
+            "製造",
+            "工場",
+        ),
     ),
     IndustryRule(
         label="電気・ガス業",
         keywords=(
-            "electricity",
-            "power",
-            "utility",
             "gas",
-            "energy supply",
             "電力",
             "ガス",
             "ユーティリティ",
@@ -265,14 +242,11 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="陸運業",
         keywords=(
-            "logistics",
-            "delivery",
-            "trucking",
-            "freight",
-            "transportation",
-            "shipping",
             "陸運",
             "物流",
+            "配送",
+            "宅配",
+            "ラストワンマイル",
         ),
     ),
     IndustryRule(
@@ -304,14 +278,11 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="倉庫・運輸関連業",
         keywords=(
-            "warehouse",
-            "warehousing",
-            "storage",
-            "3pl",
-            "fulfillment",
             "倉庫",
             "物流センター",
             "運輸",
+            "在庫管理",
+            "保管",
         ),
     ),
     IndustryRule(
@@ -319,32 +290,55 @@ RULES: tuple[IndustryRule, ...] = (
         keywords=(
             "software",
             "saas",
-            "internet",
-            "telecom",
-            "communication",
             "it",
             "cloud",
             "platform",
             "デジタル",
             "情報通信",
+            "システム開発",
+            "受託開発",
+            "web制作",
+            "ウェブ制作",
+            "itソリューション",
+            "基幹システム",
+            "業務システム",
+            "ai開発",
+            "sier",
+            "システムインテグレーター",
+            "ses",
+            "itコンサル",
+            "dx",
+            "デジタルトランスフォーメーション",
+            "基幹業務",
+            "自社開発",
         ),
     ),
     IndustryRule(
         label="卸売業",
-        keywords=("wholesale", "distributor", "distribution", "b2b sales", "卸売", "卸"),
+        keywords=(
+            "卸売",
+            "卸",
+            "商社",
+            "専門商社",
+            "総合商社",
+            "トレーディングカンパニー",
+            "輸入販売",
+            "輸出入",
+            "輸入代行",
+        ),
     ),
     IndustryRule(
         label="小売業",
         keywords=(
-            "retail",
-            "store",
-            "shop",
-            "ecommerce",
             "ec",
             "mall",
             "supermarket",
             "小売",
             "販売",
+            "通販",
+            "ネットショップ",
+            "オンラインショップ",
+            "ドラッグストア",
         ),
     ),
     IndustryRule(
@@ -387,14 +381,17 @@ RULES: tuple[IndustryRule, ...] = (
     IndustryRule(
         label="不動産業",
         keywords=(
-            "real estate",
-            "property",
-            "housing",
-            "apartment",
-            "mortgage",
             "不動産",
             "賃貸",
             "開発",
+            "不動産仲介",
+            "不動産管理",
+            "マンション管理",
+            "賃貸管理",
+            "分譲住宅",
+            "デベロッパー",
+            "賃貸住宅",
+            "テナント",
         ),
     ),
     IndustryRule(
@@ -407,6 +404,28 @@ RULES: tuple[IndustryRule, ...] = (
             "support",
             "コンサル",
             "サービス",
+            "人材派遣",
+            "人材紹介",
+            "アウトソーシング",
+            "コールセンター",
+            "学習塾",
+            "予備校",
+            "ホテル",
+            "旅館",
+            "クリーニング",
+            "介護",
+            "訪問介護",
+            "保育",
+            "保育園",
+            "幼稚園",
+            "フィットネス",
+            "ジム",
+            "エステ",
+            "美容",
+            "ブライダル",
+            "結婚式場",
+            "清掃",
+            "ハウスクリーニング",
         ),
     ),
 )
@@ -474,7 +493,7 @@ async def _fetch_website_text(
     client: httpx.AsyncClient,
     snapshot: WebsiteSnapshot | None = None,
 ) -> Result[Optional[str], Exception]:
-    """指定サイトの HTML を取得し、テキストのみを抽出する。"""
+    """指定サイトの HTML を取得し、業種に効きやすい箇所を重み付けしたテキストを返す。"""
     if snapshot and snapshot.text is not None:
         return Result.ok(snapshot.text)
 
@@ -484,26 +503,69 @@ async def _fetch_website_text(
 
     normalized = normalized_result.unwrap()
 
-    try:
-        resp = await client.get(normalized, follow_redirects=True)
-    except httpx.HTTPError as exc:
-        return Result.err(exc)
+    texts: list[str] = []
 
-    content_type = resp.headers.get("content-type", "").lower()
-    if "text/html" not in content_type:
-        return Result.ok(resp.text)
+    async def _fetch_html(url: str) -> Optional[str]:
+        try:
+            resp = await client.get(url, follow_redirects=True)
+        except httpx.HTTPError:
+            return None
+        if resp.status_code >= 400:
+            return None
+        if "text/html" not in resp.headers.get("content-type", "").lower():
+            return None
+        return resp.text
 
-    try:
-        soup = BeautifulSoup(resp.text, "html.parser")
-        return Result.ok(soup.get_text(" ", strip=True))
-    except Exception:
-        # HTML パース失敗時はテキストそのまま返す
-        return Result.ok(resp.text)
+    def _consume_html(html: str) -> None:
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+        except Exception:
+            texts.append(html)
+            return
+
+        weighted = _extract_weighted_text(soup)
+        if weighted:
+            texts.append(weighted)
+
+        business = _extract_business_section_text(soup)
+        if business:
+            texts.extend([business] * 4)
+
+        body = soup.get_text(" ", strip=True)
+        if body:
+            texts.append(body)
+
+    # main page
+    main_html = await _fetch_html(normalized)
+    if main_html:
+        _consume_html(main_html)
+
+    # /company, /about, /business から最大2ページ拾う
+    extra_paths = ("/company", "/about", "/business")
+    fetched_extra = 0
+    for path in extra_paths:
+        if fetched_extra >= 2:
+            break
+        target = urljoin(normalized + "/", path.lstrip("/"))
+        extra_html = await _fetch_html(target)
+        if not extra_html:
+            continue
+        _consume_html(extra_html)
+        fetched_extra += 1
+
+    if not texts and main_html is not None:
+        return Result.ok(main_html)
+    if not texts:
+        return Result.ok(None)
+
+    return Result.ok(" ".join(texts))
 
 
 def _normalize_text(value: str) -> str:
-    """英数字と日本語を残して小文字化する。"""
+    # 全角→半角、互換文字を統一
+    value = unicodedata.normalize("NFKC", value)
     lowered = value.lower()
+    # 英数字と日本語だけ残してスペースに
     return re.sub(r"[^0-9a-zぁ-んァ-ン一-龠ー]+", " ", lowered)
 
 
@@ -514,3 +576,57 @@ def _score_rule(rule: IndustryRule, haystack: str) -> tuple[int, set[str]]:
         if keyword in haystack:
             hits.add(keyword)
     return len(hits), hits
+
+
+def _extract_weighted_text(soup: BeautifulSoup) -> str:
+    """title / description / h1 を増幅しつつ本文も含めたテキストを返す。"""
+    parts: list[str] = []
+
+    title = soup.title.string.strip() if soup.title and soup.title.string else ""
+    if title:
+        parts.extend([title] * 3)
+
+    desc_tag = soup.find("meta", attrs={"name": "description"})
+    desc = desc_tag.get("content") if desc_tag else None
+    if desc:
+        parts.extend([desc.strip()] * 2)
+
+    h1_texts = [h.get_text(" ", strip=True) for h in soup.find_all("h1")]
+    for h1 in h1_texts:
+        if h1:
+            parts.extend([h1] * 2)
+
+    body = soup.get_text(" ", strip=True)
+    if body:
+        parts.append(body)
+
+    return " ".join(parts)
+
+
+def _extract_business_section_text(soup: BeautifulSoup) -> str:
+    """事業内容/業種テーブルや見出し周辺から事業テキストを抽出する。"""
+    texts: list[str] = []
+
+    for th in soup.find_all("th"):
+        label = th.get_text(strip=True)
+        if any(key in label for key in ["事業内容", "業種", "事業", "主な事業"]):
+            td = th.find_next("td")
+            if td:
+                texts.append(td.get_text(" ", strip=True))
+
+    for heading_tag in soup.find_all(["h1", "h2", "h3", "h4"]):
+        heading = heading_tag.get_text(strip=True)
+        if any(key in heading.lower() for key in ["事業内容", "事業案内", "business", "services"]):
+            section_parts: list[str] = []
+            sib = heading_tag.next_sibling
+            steps = 0
+            while sib is not None and steps < 5:
+                get_text = getattr(sib, "get_text", None)
+                if callable(get_text):
+                    section_parts.append(get_text(" ", strip=True))
+                sib = sib.next_sibling
+                steps += 1
+            if section_parts:
+                texts.append(" ".join(section_parts))
+
+    return " ".join(texts)

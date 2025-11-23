@@ -46,7 +46,7 @@ def iter_companies(
     conn: sqlite3.Connection, only_missing: bool = True
 ) -> Iterable[Company]:
     """
-    website_url があり、logo_url / industry が未設定の企業を逐次返す。
+    website_url があり、logo_url / industry / description が未設定の企業を逐次返す。
     recompute_all の場合は website_url がある全件を返す。
     """
     where_clause = (
@@ -56,6 +56,7 @@ def iter_companies(
           AND (
             (logo_url IS NULL OR TRIM(logo_url) = '')
             OR (industry IS NULL OR TRIM(industry) = '')
+            OR (description IS NULL OR TRIM(description) = '')
           )
         """
         if only_missing
@@ -97,6 +98,7 @@ def count_pending(conn: sqlite3.Connection, only_missing: bool = True) -> int:
           AND (
             (logo_url IS NULL OR TRIM(logo_url) = '')
             OR (industry IS NULL OR TRIM(industry) = '')
+            OR (description IS NULL OR TRIM(description) = '')
           )
         """
         if only_missing
@@ -120,11 +122,12 @@ def update_company(
     company_id: str,
     logo_url: str | None,
     industry: str | None,
+    description: str | None,
     recompute_all: bool,
     *,
     commit: bool = True,
 ) -> Result[None, Exception]:
-    """logo_url と industry を 1 件ずつ更新する。"""
+    """logo_url / industry / description を 1 件ずつ更新する。"""
     try:
         if recompute_all:
             conn.execute(
@@ -132,10 +135,11 @@ def update_company(
                 UPDATE companies
                 SET
                   logo_url = ?,
-                  industry = ?
+                  industry = ?,
+                  description = ?
                 WHERE id = ?
                 """,
-                (logo_url, industry, company_id),
+                (logo_url, industry, description, company_id),
             )
         else:
             conn.execute(
@@ -143,10 +147,11 @@ def update_company(
                 UPDATE companies
                 SET
                   logo_url = COALESCE(?, logo_url),
-                  industry = COALESCE(?, industry)
+                  industry = COALESCE(?, industry),
+                  description = COALESCE(?, description)
                 WHERE id = ?
                 """,
-                (logo_url, industry, company_id),
+                (logo_url, industry, description, company_id),
             )
         if commit:
             conn.commit()
@@ -175,6 +180,7 @@ async def _writer(
                 item.company_id,
                 item.logo_url,
                 item.industry,
+                item.description,
                 recompute_all=recompute_all,
                 commit=False,
             )
@@ -198,7 +204,7 @@ async def run_async(
     db_path: Path, recompute_all: bool = False, concurrency: int = DEFAULT_CONCURRENCY
 ) -> Result[int, Exception]:
     """
-    DB から企業を取得し、favicon と業種を並列で探索して DB にバッチ書き戻しする。
+    DB から企業を取得し、favicon / meta description / 業種を並列で探索して DB にバッチ書き戻しする。
     """
     try:
         conn = sqlite3.connect(db_path)
@@ -250,33 +256,39 @@ async def run_async(
                 semaphore = asyncio.Semaphore(max(1, concurrency))
                 progress = tqdm(total=total, desc="enriching companies")
 
-                async def _process_company(company: Company) -> None:
+                async def _process_company(company: Company) -> Result[UpdatePayload | None, Exception]:
                     async with semaphore:
                         try:
                             enriched_result = await enricher.enrich(company)
                             if enriched_result.is_err():
-                                errors.append((company.name or "", str(enriched_result.unwrap_err())))
-                                return
+                                errors.append(
+                                    (company.name or "", str(enriched_result.unwrap_err()))
+                                )
+                                return Result.ok(None)
 
                             enriched = enriched_result.unwrap()
-                            if not enriched.logo_url and not enriched.industry:
-                                return
-
-                            await queue.put(
-                                UpdatePayload(
-                                    company_id=company.id,
-                                    logo_url=enriched.logo_url,
-                                    industry=enriched.industry,
-                                )
+                            payload = UpdatePayload(
+                                company_id=company.id,
+                                logo_url=enriched.logo_url,
+                                industry=enriched.industry,
+                                description=enriched.description,
                             )
+                            try:
+                                await queue.put(payload)
+                            except Exception as exc:
+                                return Result.err(exc)
+                            return Result.ok(payload)
                         except Exception as exc:
                             errors.append((company.name or "", str(exc)))
+                            return Result.err(exc)
                         finally:
                             progress.update(1)
 
                 tasks = [asyncio.create_task(_process_company(company)) for company in companies]
                 for task in asyncio.as_completed(tasks):
-                    await task
+                    task_result = await task
+                    if task_result.is_err() and not processing_error:
+                        processing_error = task_result.unwrap_err()
                 progress.close()
         except Exception as exc:
             processing_error = exc
@@ -318,14 +330,14 @@ class UpdatePayload(BaseModel):
     company_id: str
     logo_url: str | None
     industry: str | None
-
+    description: str | None
 
 def _parse_args() -> Args:
     """CLI 引数を解釈する。"""
     parser = argparse.ArgumentParser(
         description=(
-            "Fetch favicon URLs and classify industry for companies using "
-            "website_url in SQLite."
+            "Fetch favicon URLs, meta descriptions, and classify industry for "
+            "companies using website_url in SQLite."
         )
     )
     parser.add_argument(
@@ -338,7 +350,7 @@ def _parse_args() -> Args:
         "--recompute-all",
         action="store_true",
         help=(
-            "既存の logo_url / industry が入っていても再計算して上書きします"
+            "既存の logo_url / description / industry が入っていても再計算して上書きします"
             "（デフォルトは未設定のみ更新）。"
         ),
     )
@@ -356,7 +368,7 @@ def main() -> None:
         raise SystemExit(1)
 
     updated = result.unwrap()
-    print(f"Updated {updated} companies (logo_url / industry).")
+    print(f"Updated {updated} companies (logo_url / description / industry).")
 
 
 if __name__ == "__main__":
