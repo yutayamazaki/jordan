@@ -67,7 +67,9 @@ def count_pending(conn: sqlite3.Connection) -> int:
     return int(row["cnt"]) if row and "cnt" in row.keys() else 0
 
 
-def update_logo(conn: sqlite3.Connection, company_id: str, logo_url: str) -> Result[None, Exception]:
+def update_logo(
+    conn: sqlite3.Connection, company_id: str, logo_url: str
+) -> Result[None, Exception]:
     """logo_url を 1 件ずつ更新する。"""
     try:
         conn.execute(

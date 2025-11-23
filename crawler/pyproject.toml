@@ -10,3 +10,24 @@ dependencies = [
     "tqdm>=4.66.0",
     "beautifulsoup4>=4.12.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "coverage[toml]>=7.6.0",
+    "ruff>=0.5.0",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["enrichers", "enrich_contact.py"]
+
+[tool.coverage.report]
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

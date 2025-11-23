@@ -22,7 +22,9 @@ def _normalize_website_url(raw_url: str) -> Result[str, Exception]:
         trimmed = f"https://{trimmed}"
 
     parsed = urlsplit(trimmed)
-    if not parsed.netloc:
+    hostname = parsed.hostname or parsed.netloc
+    # ドメインっぽい文字列かを簡易チェック（最低1つのドットを含む）
+    if not parsed.netloc or not hostname or "." not in hostname:
         return Result.err(ValueError(f"Invalid website_url: {raw_url!r}"))
 
     normalized = f"{parsed.scheme}://{parsed.netloc}"
@@ -94,7 +96,10 @@ def _fetch_favicon_from_html(
     website_url: str,
     client: httpx.Client,
 ) -> Result[Optional[str], Exception]:
-    """HTML を取得して <link rel=\"icon\"> 等を解決する。失敗時は None を返しフォールバックに任せる。"""
+    """
+    HTML を取得して <link rel="icon"> 等を解決する。
+    失敗時は None を返しフォールバックに任せる。
+    """
     try:
         resp = client.get(website_url, follow_redirects=True)
     except httpx.HTTPError:

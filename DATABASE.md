@@ -49,6 +49,7 @@
 | last_name     | TEXT    |                                      | 姓                                      |
 | position      | TEXT    |                                      | 役職                                    |
 | department    | TEXT    |                                      | 部署                                    |
+| department_category | TEXT |                                    | 部署カテゴリ（正規化）                   |
 | seniority     | TEXT    |                                      | シニアリティ（例: C-level, Manager）    |
 | country       | TEXT    |                                      | 国                                      |
 | city          | TEXT    |                                      | 市区町村                                |

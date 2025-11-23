@@ -402,6 +402,25 @@ export function CompaniesTable({
                         </div>
                       )}
                     </div>
+                    <div className="col-span-2">
+                      <p className="font-semibold text-slate-600">想定されるメールアドレスの形式</p>
+                      {detail.domains.length === 0 ? (
+                        <p className="text-slate-400">-</p>
+                      ) : (
+                        <ul className="mt-1 space-y-1 text-sm">
+                          {detail.domains.map((d) => (
+                            <li
+                              key={d.id}
+                              className="flex items-center justify-between gap-2 rounded border border-slate-200 px-2 py-1"
+                            >
+                              <span className="text-slate-800">
+                                {d.pattern ? `${d.pattern}@${d.domain}` : "-"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </section>
                 </div>
 

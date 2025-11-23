@@ -18,7 +18,10 @@ export type ContactListItem = {
   id: string;
   name: string;
   position: string | null;
+  positionCategory: string | null;
   department: string | null;
+  departmentCategory: string | null;
+  companyId: string;
   companyName: string;
   companyDomain: string | null;
   companyWebsiteUrl: string | null;
@@ -45,10 +48,12 @@ export type ContactDetail = {
     id: string;
     name: string;
     position: string | null;
+    positionCategory: string | null;
     department: string | null;
     departmentCategory: string | null;
     firstName: string | null;
     lastName: string | null;
+    companyId: string;
     companyName: string;
     companyDomain: string | null;
     companyWebsiteUrl: string | null;
@@ -64,13 +69,17 @@ export type ContactSortField =
   | "companyDomain"
   | "name"
   | "position"
+  | "positionCategory"
   | "department"
+  | "departmentCategory"
   | "createdAt"
   | "updatedAt";
 
 export type SortDirection = "asc" | "desc";
 
 export type DeliverableEmailsFilter = "with" | "without";
+export type DepartmentCategoryFilter = string | undefined;
+export type PositionCategoryFilter = string | undefined;
 
 type DbClient = ReturnType<typeof getDb>;
 
@@ -102,6 +111,8 @@ function buildDeliverableEmailsSubquery(db: DbClient) {
 function buildContactFilters(
   domainQuery: string | undefined,
   deliverableFilter: DeliverableEmailsFilter,
+  departmentCategory: DepartmentCategoryFilter,
+   positionCategory: PositionCategoryFilter,
   deliverableEmailsSubquery: ReturnType<typeof buildDeliverableEmailsSubquery>,
   companyDomainsSubquery: ReturnType<typeof buildCompanyDomainsSubquery>
 ): SQL<unknown>[] {
@@ -125,6 +136,14 @@ function buildContactFilters(
     filters.push(isNull(deliverableEmailsSubquery.deliverableEmails));
   }
 
+  if (departmentCategory && departmentCategory.trim().length > 0) {
+    filters.push(eq(contacts.departmentCategory, departmentCategory.trim()));
+  }
+
+  if (positionCategory && positionCategory.trim().length > 0) {
+    filters.push(eq(contacts.positionCategory, positionCategory.trim()));
+  }
+
   return filters;
 }
 
@@ -141,8 +160,12 @@ function resolveSortColumn(
       return contacts.fullName;
     case "position":
       return contacts.position;
+    case "positionCategory":
+      return contacts.positionCategory;
     case "department":
       return contacts.department;
+    case "departmentCategory":
+      return contacts.departmentCategory;
     case "createdAt":
       return contacts.createdAt;
     case "updatedAt":
@@ -158,7 +181,9 @@ export function listContacts(
   sortField: ContactSortField = "companyDomain",
   sortDirection: SortDirection = "asc",
   domainQuery?: string,
-  deliverableFilter: DeliverableEmailsFilter = "with"
+  deliverableFilter: DeliverableEmailsFilter = "with",
+  departmentCategory?: DepartmentCategoryFilter,
+  positionCategory?: PositionCategoryFilter
 ): ContactListItem[] {
   const db = getDb();
   const companyDomainsSubquery = buildCompanyDomainsSubquery(db);
@@ -166,6 +191,8 @@ export function listContacts(
   const filters = buildContactFilters(
     domainQuery,
     deliverableFilter,
+    departmentCategory,
+    positionCategory,
     deliverableEmailsSubquery,
     companyDomainsSubquery
   );
@@ -179,7 +206,10 @@ export function listContacts(
       id: contacts.id,
       name: contacts.fullName,
       position: contacts.position,
+      positionCategory: contacts.positionCategory,
       department: contacts.department,
+      departmentCategory: contacts.departmentCategory,
+      companyId: contacts.companyId,
       companyName: companies.name,
       companyDomain: companyDomainsSubquery.domain,
       companyWebsiteUrl: companies.websiteUrl,
@@ -210,7 +240,9 @@ export function listAllContacts(
   sortField: ContactSortField = "companyDomain",
   sortDirection: SortDirection = "asc",
   domainQuery?: string,
-  deliverableFilter: DeliverableEmailsFilter = "with"
+  deliverableFilter: DeliverableEmailsFilter = "with",
+  departmentCategory?: DepartmentCategoryFilter,
+  positionCategory?: PositionCategoryFilter
 ): ContactListItem[] {
   const db = getDb();
   const companyDomainsSubquery = buildCompanyDomainsSubquery(db);
@@ -218,6 +250,8 @@ export function listAllContacts(
   const filters = buildContactFilters(
     domainQuery,
     deliverableFilter,
+    departmentCategory,
+    positionCategory,
     deliverableEmailsSubquery,
     companyDomainsSubquery
   );
@@ -231,7 +265,10 @@ export function listAllContacts(
       id: contacts.id,
       name: contacts.fullName,
       position: contacts.position,
+      positionCategory: contacts.positionCategory,
       department: contacts.department,
+      departmentCategory: contacts.departmentCategory,
+      companyId: contacts.companyId,
       companyName: companies.name,
       companyDomain: companyDomainsSubquery.domain,
       companyWebsiteUrl: companies.websiteUrl,
@@ -260,7 +297,9 @@ export function listAllContacts(
 
 export function countContacts(
   domainQuery?: string,
-  deliverableFilter: DeliverableEmailsFilter = "with"
+  deliverableFilter: DeliverableEmailsFilter = "with",
+  departmentCategory?: DepartmentCategoryFilter,
+  positionCategory?: PositionCategoryFilter
 ): number {
   const db = getDb();
   const companyDomainsSubquery = buildCompanyDomainsSubquery(db);
@@ -268,6 +307,8 @@ export function countContacts(
   const filters = buildContactFilters(
     domainQuery,
     deliverableFilter,
+    departmentCategory,
+    positionCategory,
     deliverableEmailsSubquery,
     companyDomainsSubquery
   );
@@ -302,10 +343,12 @@ export function getContactDetail(contactId: string): ContactDetail | null {
       id: contacts.id,
       name: contacts.fullName,
       position: contacts.position,
+      positionCategory: contacts.positionCategory,
       department: contacts.department,
-      departmentCategory: contacts.seniority,
+      departmentCategory: contacts.departmentCategory,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
+      companyId: contacts.companyId,
       companyName: companies.name,
       companyDomain: companyDomainsSubquery.domain,
       companyWebsiteUrl: companies.websiteUrl,

@@ -28,6 +28,21 @@ function buildBreadcrumbs(pathname: string): BreadcrumbItem[] {
     ];
   }
 
+  if (pathname === "/companies") {
+    return [
+      { label: "ホーム", href: "/" },
+      { label: "Companies" }
+    ];
+  }
+
+  if (pathname.startsWith("/companies/")) {
+    return [
+      { label: "ホーム", href: "/" },
+      { label: "Companies", href: "/companies" },
+      { label: "詳細" }
+    ];
+  }
+
   return [{ label: "ホーム", href: "/" }];
 }
 

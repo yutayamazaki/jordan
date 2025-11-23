@@ -58,6 +58,8 @@ class Contact(JordanBaseModel):
     last_name: Optional[str] = None
     position: Optional[str] = None
     department: Optional[str] = None
+    position_category: Optional[str] = None
+    department_category: Optional[str] = None
     seniority: Optional[str] = None
     country: Optional[str] = None
     city: Optional[str] = None

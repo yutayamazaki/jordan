@@ -9,7 +9,7 @@ const createContactSearchPrompt = (name: string, domain: string, department: str
   const trimmedDepartment = department.trim();
   const categoryInfo = trimmedDepartment
     ? getDepartmentCategorySearchInfo(trimmedDepartment)
-    : { category: "OTHER" as const, relatedKeywords: [] };
+    : { category: "その他" as const, relatedKeywords: [] };
 
   const departmentDescription = trimmedDepartment || "特に指定なし";
   const categoryDescription =

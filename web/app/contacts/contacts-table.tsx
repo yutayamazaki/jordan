@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type MouseEvent } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { FiCopy } from "react-icons/fi";
@@ -98,6 +99,8 @@ export function ContactsTable({
       <TableHeader>
         <TableRow>
           <TableHead>{renderHeader("氏名", "name")}</TableHead>
+          <TableHead>{renderHeader("役職", "positionCategory")}</TableHead>
+          <TableHead>{renderHeader("部署", "departmentCategory")}</TableHead>
           <TableHead>{renderHeader("会社名", "companyName")}</TableHead>
           <TableHead>メール</TableHead>
           <TableHead>{renderHeader("作成日", "createdAt")}</TableHead>
@@ -126,8 +129,19 @@ export function ContactsTable({
               <TableCell>
                 {c.name}
               </TableCell>
+              <TableCell className="">
+                {c.positionCategory ?? "-"}
+              </TableCell>
+              <TableCell className="">
+                {c.departmentCategory ?? "-"}
+              </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2">
+                <Link
+                  href={`/companies/${c.companyId}`}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  className="group flex items-center gap-2 text-slate-900 transition-colors hover:text-sky-700"
+                >
                   {c.companyLogoUrl && !rowLogoErrors[c.id] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -143,8 +157,10 @@ export function ContactsTable({
                       {c.companyName.slice(0, 1)}
                     </span>
                   )}
-                  <span>{c.companyName}</span>
-                </div>
+                  <span className="underline decoration-transparent underline-offset-4 transition-[color,decoration-color] group-hover:decoration-sky-500">
+                    {c.companyName}
+                  </span>
+                </Link>
               </TableCell>
               <TableCell className="text-sm text-slate-700">
                 {emails.length === 0 ? (

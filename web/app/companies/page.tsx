@@ -27,7 +27,7 @@ export function CompaniesPageContent({
   searchParams,
   initialSelectedId
 }: CompaniesPageProps) {
-  const pageSize = 20;
+  const pageSize = 100;
 
   const domainParam = searchParams?.domain;
   const domainQuery =

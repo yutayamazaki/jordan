@@ -4,7 +4,9 @@ import {
   countContacts,
   type ContactSortField,
   type SortDirection,
-  type DeliverableEmailsFilter
+  type DeliverableEmailsFilter,
+  type DepartmentCategoryFilter,
+  type PositionCategoryFilter
 } from "@/lib/contacts";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -20,6 +22,8 @@ export type ContactsPageProps = {
     direction?: string;
     domain?: string;
     emails?: string;
+    departmentCategory?: string;
+    positionCategory?: string;
   };
   initialSelectedId?: string | null;
 };
@@ -28,19 +32,23 @@ export function ContactsPageContent({
   searchParams,
   initialSelectedId
 }: ContactsPageProps) {
-  const pageSize = 20;
+  const pageSize = 100;
 
   const sortParam = searchParams?.sort;
   const directionParam = searchParams?.direction;
   const domainParam = searchParams?.domain;
   const emailsParam = searchParams?.emails;
+  const departmentCategoryParam = searchParams?.departmentCategory;
+  const positionCategoryParam = searchParams?.positionCategory;
 
   const sortField: ContactSortField =
     sortParam === "companyName" ||
     sortParam === "companyDomain" ||
     sortParam === "name" ||
     sortParam === "position" ||
+    sortParam === "positionCategory" ||
     sortParam === "department" ||
+    sortParam === "departmentCategory" ||
     sortParam === "createdAt" ||
     sortParam === "updatedAt"
       ? sortParam
@@ -55,7 +63,22 @@ export function ContactsPageContent({
   const emailsFilter: DeliverableEmailsFilter =
     emailsParam === "with" || emailsParam === "without" ? emailsParam : "with";
 
-  const totalCount = countContacts(domainQuery, emailsFilter);
+  const departmentCategory: DepartmentCategoryFilter =
+    departmentCategoryParam && departmentCategoryParam.trim().length > 0
+      ? departmentCategoryParam.trim()
+      : undefined;
+
+  const positionCategory: PositionCategoryFilter =
+    positionCategoryParam && positionCategoryParam.trim().length > 0
+      ? positionCategoryParam.trim()
+      : undefined;
+
+  const totalCount = countContacts(
+    domainQuery,
+    emailsFilter,
+    departmentCategory,
+    positionCategory
+  );
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   let page = Number(searchParams?.page ?? "1");
@@ -110,7 +133,9 @@ export function ContactsPageContent({
     sortField,
     sortDirection,
     domainQuery,
-    emailsFilter
+    emailsFilter,
+    departmentCategory,
+    positionCategory
   );
 
   return (
@@ -123,7 +148,15 @@ export function ContactsPageContent({
             <Link
               href={`/api/contacts/export?sort=${sortField}&direction=${sortDirection}${
                 domainQuery ? `&domain=${encodeURIComponent(domainQuery)}` : ""
-              }&emails=${emailsFilter}`}
+              }&emails=${emailsFilter}${
+                departmentCategory
+                  ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
+                  : ""
+              }${
+                positionCategory
+                  ? `&positionCategory=${encodeURIComponent(positionCategory)}`
+                  : ""
+              }`}
               prefetch={false}
             >
               CSVエクスポート
@@ -144,6 +177,8 @@ export function ContactsPageContent({
             sortDirection={sortDirection}
             domainQuery={domainQuery}
             emailsFilter={emailsFilter}
+            departmentCategory={departmentCategory}
+            positionCategory={positionCategory}
             initialSelectedId={initialSelectedId}
           />
           <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
@@ -162,15 +197,31 @@ export function ContactsPageContent({
                   href={
                     page <= 1
                       ? `/contacts?sort=${sortField}&direction=${sortDirection}${
-                          domainQuery
-                            ? `&domain=${encodeURIComponent(domainQuery)}`
+                         domainQuery
+                           ? `&domain=${encodeURIComponent(domainQuery)}`
+                           : ""
+                       }&emails=${emailsFilter}${
+                         departmentCategory
+                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
+                           : ""
+                        }${
+                          positionCategory
+                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
                             : ""
-                        }&emails=${emailsFilter}`
+                       }`
                       : `/contacts?page=${page - 1}&sort=${sortField}&direction=${sortDirection}${
                           domainQuery
                             ? `&domain=${encodeURIComponent(domainQuery)}`
                             : ""
-                        }&emails=${emailsFilter}`
+                       }&emails=${emailsFilter}${
+                         departmentCategory
+                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
+                           : ""
+                        }${
+                          positionCategory
+                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
+                            : ""
+                       }`
                   }
                 >
                   前へ
@@ -192,7 +243,13 @@ export function ContactsPageContent({
                         (domainQuery
                           ? `&domain=${encodeURIComponent(domainQuery)}`
                           : "") +
-                        `&emails=${emailsFilter}`;
+                        `&emails=${emailsFilter}` +
+                        (departmentCategory
+                          ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
+                          : "") +
+                        (positionCategory
+                          ? `&positionCategory=${encodeURIComponent(positionCategory)}`
+                          : "");
 
                       return (
                         <Button
@@ -220,12 +277,28 @@ export function ContactsPageContent({
                           domainQuery
                             ? `&domain=${encodeURIComponent(domainQuery)}`
                             : ""
-                        }&emails=${emailsFilter}`
+                       }&emails=${emailsFilter}${
+                         departmentCategory
+                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
+                           : ""
+                        }${
+                          positionCategory
+                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
+                            : ""
+                       }`
                       : `/contacts?page=${page + 1}&sort=${sortField}&direction=${sortDirection}${
                           domainQuery
                             ? `&domain=${encodeURIComponent(domainQuery)}`
                             : ""
-                        }&emails=${emailsFilter}`
+                       }&emails=${emailsFilter}${
+                         departmentCategory
+                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
+                           : ""
+                        }${
+                          positionCategory
+                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
+                            : ""
+                       }`
                   }
                 >
                   次へ

@@ -6,11 +6,14 @@ import type {
   ContactSortField,
   SortDirection,
   DeliverableEmailsFilter,
+  DepartmentCategoryFilter,
+  PositionCategoryFilter,
   ContactDetail
 } from "@/lib/contacts";
 import { Button } from "@/components/ui/button";
 import { ContactsTable } from "./contacts-table";
 import { EmailCandidatesTable } from "./email-candidates-table";
+import Link from "next/link";
 
 type ContactsViewProps = {
   contacts: ContactListItem[];
@@ -18,6 +21,8 @@ type ContactsViewProps = {
   sortDirection: SortDirection;
   domainQuery?: string;
   emailsFilter: DeliverableEmailsFilter;
+  departmentCategory?: DepartmentCategoryFilter;
+  positionCategory?: PositionCategoryFilter;
   initialSelectedId?: string | null;
 };
 
@@ -27,6 +32,8 @@ export function ContactsView({
   sortDirection,
   domainQuery,
   emailsFilter,
+  departmentCategory,
+  positionCategory,
   initialSelectedId
 }: ContactsViewProps) {
   const router = useRouter();
@@ -135,6 +142,35 @@ export function ContactsView({
             <option value="with">送信可能メール: あり</option>
             <option value="without">送信可能メール: なし</option>
           </select>
+          <select
+            name="departmentCategory"
+            defaultValue={departmentCategory ?? ""}
+            className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          >
+            <option value="">全部署カテゴリ</option>
+            <option value="経営">経営</option>
+            <option value="人事・労務">人事・労務</option>
+            <option value="経理・財務">経理・財務</option>
+            <option value="法務">法務</option>
+            <option value="購買">購買</option>
+            <option value="営業">営業</option>
+            <option value="マーケティング">マーケティング</option>
+            <option value="情報システム">情報システム</option>
+            <option value="その他">その他</option>
+          </select>
+          <select
+            name="positionCategory"
+            defaultValue={positionCategory ?? ""}
+            className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+          >
+            <option value="">全役職カテゴリ</option>
+            <option value="経営">経営</option>
+            <option value="部長">部長</option>
+            <option value="次長・課長">次長・課長</option>
+            <option value="主任">主任</option>
+            <option value="担当者">担当者</option>
+            <option value="その他">その他</option>
+          </select>
           <input type="hidden" name="sort" value={sortField} />
           <input type="hidden" name="direction" value={sortDirection} />
           <Button type="submit" variant="secondary">
@@ -173,81 +209,103 @@ export function ContactsView({
                   <>
                     <section className="space-y-2">
                       <div className="flex items-start gap-3">
-                    {detail.contact.companyLogoUrl && !logoError ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={detail.contact.companyLogoUrl}
-                        alt={`${detail.contact.companyName} logo`}
-                        className="h-12 w-12 rounded-md bg-white object-contain ring-1 ring-slate-200"
-                        onError={() => setLogoError(true)}
-                      />
-                    ) : (
-                      <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold uppercase text-slate-600">
-                        {detail.contact.companyName.slice(0, 1)}
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">氏名</p>
-                      <p className="text-base font-semibold text-slate-900">
-                        {detail.contact.name}
-                      </p>
-                      <p className="text-[13px] text-slate-600">
-                        {detail.contact.companyName}
-                        {detail.contact.companyDomain && (
-                          <span className="ml-2 font-mono text-xs text-slate-500">
-                            {detail.contact.companyDomain}
-                          </span>
+                        {detail.contact.companyLogoUrl && !logoError ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={detail.contact.companyLogoUrl}
+                            alt={`${detail.contact.companyName} logo`}
+                            className="h-12 w-12 rounded-md bg-white object-contain ring-1 ring-slate-200"
+                            onError={() => setLogoError(true)}
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold uppercase text-slate-600">
+                            {detail.contact.companyName.slice(0, 1)}
+                          </div>
                         )}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm text-slate-700">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        役職
-                      </p>
-                      <p>{detail.contact.position ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        部署
-                      </p>
-                      <p>{detail.contact.department ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        作成日
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        {formatDate(detail.contact.createdAt)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        更新日
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        {formatDate(detail.contact.updatedAt)}
-                      </p>
-                    </div>
-                  </div>
-                </section>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">
+                            氏名
+                          </p>
+                          <div className="flex flex-wrap items-baseline gap-2">
+                            <p className="text-lg font-semibold text-slate-900">
+                              {detail.contact.name}
+                            </p>
+                            {detail.contact.position && (
+                              <span className="text-sm text-slate-600">
+                                {detail.contact.position}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </section>
 
-                <section className="mt-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      メール候補
-                    </h4>
-                    <span className="text-[11px] text-slate-500">
-                      {detail.emailCandidates.length}件
-                    </span>
-                  </div>
-                  {detail.emailCandidates.length === 0 ? (
-                    <p className="text-sm text-slate-500">メール候補がありません</p>
-                  ) : (
-                    <EmailCandidatesTable emailCandidates={detail.emailCandidates} />
-                  )}
-                </section>
+                    <section className="mt-4 grid grid-cols-2 gap-3 text-sm text-slate-700">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          会社名
+                        </p>
+                        <p>
+                          <Link href={`/companies/${detail.contact.companyId}`} className="text-sky-600 underline hover:text-sky-800">
+                            {detail.contact.companyName}
+                          </Link>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          ドメイン名
+                        </p>
+                        <p>{detail.contact.companyDomain ?? "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          部署
+                        </p>
+                        <p>{detail.contact.department ?? "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          部署カテゴリ
+                        </p>
+                        <p>{detail.contact.departmentCategory ?? "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          役職
+                        </p>
+                        <p>{detail.contact.position ?? "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          役職カテゴリ
+                        </p>
+                        <p>{detail.contact.positionCategory ?? "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          更新日
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          {formatDate(detail.contact.updatedAt)}
+                        </p>
+                      </div>
+                    </section>
+
+                    <section className="mt-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          メール候補
+                        </h4>
+                        <span className="text-[11px] text-slate-500">
+                          {detail.emailCandidates.length}件
+                        </span>
+                      </div>
+                      {detail.emailCandidates.length === 0 ? (
+                        <p className="text-sm text-slate-500">メール候補がありません</p>
+                      ) : (
+                        <EmailCandidatesTable emailCandidates={detail.emailCandidates} />
+                      )}
+                    </section>
               </>
             ) : (
               <p className="text-sm text-slate-500">担当者を選択してください</p>

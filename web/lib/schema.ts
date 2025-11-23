@@ -63,7 +63,9 @@ export const contacts = sqliteTable("contacts", {
     firstName: text("first_name"),
     lastName: text("last_name"),
     position: text("position"), // 役職
+    positionCategory: text("position_category"), // 役職カテゴリ（正規化済み）
     department: text("department"), // 部署
+    departmentCategory: text("department_category"), // 部署カテゴリ（正規化済み）
     seniority: text("seniority"), // "C-level", "Manager" 等
     country: text("country"),
     city: text("city"),
@@ -94,8 +96,11 @@ export const emails = sqliteTable("emails", {
     domainId: text("domain_id")
       .references(() => domains.id, { onDelete: "set null" }),
     email: text("email").notNull(),
-    kind: text("kind"), // "personal" | "generic" | "role" 等
-    source: text("source"), // "pattern_guess" | "on_page" | ...
+    // "personal": 個人メール
+    // "generic": info@, contact@, sales@ 等の汎用メール
+    // "role": CTO@, CEO@ 等の役職メール
+    kind: text("kind"),
+    source: text("source"), // "pattern_guess" | "on_page" | "https://company.com/recruite" 等
     isPrimary: integer("is_primary", { mode: "boolean" })
       .notNull()
       .default(false),

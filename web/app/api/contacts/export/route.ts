@@ -3,7 +3,9 @@ import {
   listAllContacts,
   type ContactSortField,
   type SortDirection,
-  type DeliverableEmailsFilter
+  type DeliverableEmailsFilter,
+  type DepartmentCategoryFilter,
+  type PositionCategoryFilter
 } from "@/lib/contacts";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +24,9 @@ function parseSortParams(url: string): {
     sortParam === "companyDomain" ||
     sortParam === "name" ||
     sortParam === "position" ||
-    sortParam === "department"
+    sortParam === "positionCategory" ||
+    sortParam === "department" ||
+    sortParam === "departmentCategory"
       ? sortParam
       : "companyDomain";
 
@@ -48,12 +52,18 @@ export async function GET(request: Request) {
     request.url
   );
   const domainQuery = url.searchParams.get("domain") ?? undefined;
+  const departmentCategory: DepartmentCategoryFilter =
+    url.searchParams.get("departmentCategory") ?? undefined;
+  const positionCategory: PositionCategoryFilter =
+    url.searchParams.get("positionCategory") ?? undefined;
 
   const contacts = listAllContacts(
     sortField,
     sortDirection,
     domainQuery ?? undefined,
-    emailsFilter
+    emailsFilter,
+    departmentCategory,
+    positionCategory
   );
 
   const header = ["name", "position", "department", "company", "domain", "email"];
