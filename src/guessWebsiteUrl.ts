@@ -2,6 +2,8 @@ import "dotenv/config";
 import { err, ok, Result, ResultAsync } from "neverthrow";
 import { getDb } from "./infrastructure/sqliteClient";
 
+const DEFAULT_CONCURRENCY = 20;
+
 type CompanyRow = {
   id: string;
   name: string;
@@ -150,8 +152,14 @@ async function chooseFaviconUrl(websiteUrl: string): Promise<Result<string | nul
     return err(candidatesResult.error);
   }
 
-  for (const url of candidatesResult.value) {
-    const result = await checkUrl(url);
+  const checks = await Promise.all(
+    candidatesResult.value.map(async (url) => {
+      const result = await checkUrl(url);
+      return { url, result };
+    })
+  );
+
+  for (const { url, result } of checks) {
     if (result.isErr()) {
       return err(result.error);
     }
@@ -213,6 +221,37 @@ function updateCompanyUrls(
   }
 }
 
+function createLimiter(limit: number) {
+  let active = 0;
+  const queue: (() => void)[] = [];
+
+  const next = () => {
+    active--;
+    const run = queue.shift();
+    if (run) {
+      run();
+    }
+  };
+
+  return function <T>(task: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const runTask = () => {
+        active++;
+        task()
+          .then(resolve)
+          .catch(reject)
+          .finally(next);
+      };
+
+      if (active < limit) {
+        runTask();
+      } else {
+        queue.push(runTask);
+      }
+    });
+  };
+}
+
 async function run(): Promise<Result<void, Error>> {
   try {
     const db = getDb();
@@ -228,10 +267,19 @@ async function run(): Promise<Result<void, Error>> {
     }
     const companies = companiesResult.value;
 
-    if (companies.length === 0) {
-      console.log("No companies found in database.");
+    const companiesToProcess = companies.filter((company) => {
+      const domain = company.domain?.trim() ?? "";
+      const hasWebsite = !!(company.website_url?.trim());
+      return domain && !hasWebsite;
+    });
+
+    if (companiesToProcess.length === 0) {
+      console.log("No companies need website resolution.");
       return ok(undefined);
     }
+
+    const concurrency = DEFAULT_CONCURRENCY;
+    const limit = createLimiter(concurrency);
 
     const updateStmt = db.prepare(
       "UPDATE companies SET website_url = ?, favicon_url = ? WHERE id = ?"
@@ -240,12 +288,27 @@ async function run(): Promise<Result<void, Error>> {
     let updated = 0;
     let skipped = 0;
 
-    for (const company of companies) {
-      console.log(
-        `Resolving website URL for: ${company.name} (${company.domain})...`
-      );
+    const tasks = companiesToProcess.map((company) =>
+      limit(async () => {
+        const urlsResult = await resolveCompanyUrls(company);
+        return { company, urlsResult };
+      })
+    );
 
-      const urlsResult = await resolveCompanyUrls(company);
+    const results = await Promise.allSettled(tasks);
+
+    for (const result of results) {
+      if (result.status === "rejected") {
+        return err(
+          result.reason instanceof Error
+            ? result.reason
+            : new Error("Failed to resolve company URLs")
+        );
+      }
+
+      const { company, urlsResult } = result.value;
+      console.log(`Resolved: ${company.name} (${company.domain})`);
+
       if (urlsResult.isErr()) {
         return err(urlsResult.error);
       }
@@ -269,6 +332,10 @@ async function run(): Promise<Result<void, Error>> {
 
       updated++;
     }
+
+    console.log(
+      `Processing finished. Updated: ${updated}, skipped (no website): ${skipped}, total considered: ${companiesToProcess.length}.`
+    );
 
     return ok(undefined);
   } catch (error) {

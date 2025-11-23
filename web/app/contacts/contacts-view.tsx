@@ -63,7 +63,7 @@ export function ContactsView({
             type="text"
             name="domain"
             defaultValue={domainQuery ?? ""}
-            placeholder="会社名 または ドメイン"
+            placeholder="会社名・ドメイン・役職・部署"
             className="h-8 w-64 rounded-md border border-slate-300 bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
           />
           <select

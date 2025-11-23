@@ -101,9 +101,11 @@ export function listContacts(
   const params: unknown[] = [];
 
   if (domainQuery && domainQuery.trim().length > 0) {
-    whereClauses.push("(co.domain LIKE ? OR co.name LIKE ?)");
+    whereClauses.push(
+      "(co.domain LIKE ? OR co.name LIKE ? OR c.position LIKE ? OR c.department LIKE ?)"
+    );
     const q = `%${domainQuery.trim()}%`;
-    params.push(q, q);
+    params.push(q, q, q, q);
   }
 
   if (deliverableFilter === "with") {
@@ -189,9 +191,11 @@ export function listAllContacts(
   const params: unknown[] = [];
 
   if (domainQuery && domainQuery.trim().length > 0) {
-    whereClauses.push("(co.domain LIKE ? OR co.name LIKE ?)");
+    whereClauses.push(
+      "(co.domain LIKE ? OR co.name LIKE ? OR c.position LIKE ? OR c.department LIKE ?)"
+    );
     const q = `%${domainQuery.trim()}%`;
-    params.push(q, q);
+    params.push(q, q, q, q);
   }
 
   if (deliverableFilter === "with") {
@@ -243,9 +247,11 @@ export function countContacts(
   const params: unknown[] = [];
 
   if (domainQuery && domainQuery.trim().length > 0) {
-    whereClauses.push("(co.domain LIKE ? OR co.name LIKE ?)");
+    whereClauses.push(
+      "(co.domain LIKE ? OR co.name LIKE ? OR c.position LIKE ? OR c.department LIKE ?)"
+    );
     const q = `%${domainQuery.trim()}%`;
-    params.push(q, q);
+    params.push(q, q, q, q);
   }
 
   if (deliverableFilter === "with") {

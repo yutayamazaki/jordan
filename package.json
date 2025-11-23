@@ -6,6 +6,7 @@
     "build": "tsc",
     "collect": "ts-node src/collect.ts",
     "score": "ts-node src/score.ts",
+    "score:csv": "ts-node src/email-hippo-csv.ts",
     "show-domain": "ts-node src/showDomain.ts",
     "guess-website": "ts-node src/guessWebsiteUrl.ts",
     "test": "vitest run",

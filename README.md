@@ -64,7 +64,7 @@ score フェーズは、「収集済みの生データに対して後から検�
 
 ## ドメインモデル・スキーマ
 
-[DATBASE.md](./DATBASE.md) に各テーブルのスキーマ定義があります。
+[DATABASE.md](./DATABASE.md) に各テーブルのスキーマ定義があります。
 
 ### `src/domain/entities/`
 
@@ -253,6 +253,18 @@ npm run score
   - `email_patterns`
   などのテーブルに反映します。
 
+### 2-1. EmailHippo API の代わりに CSV を使って score 実行
+
+EmailHippo API コールをせず、事前取得した EmailHippo CSV を検証結果として利用します。
+
+```bash
+npm run score:csv -- --email-verifications-csv=./emailhippo_results.csv
+```
+
+- `--email-verifications-csv` は必須。`CheckedEmailAddress` と `Status` を含む EmailHippo の CSV を指定してください（タブ・カンマどちらの区切りにも対応）。
+- `company_scans` に collect 済みの生データが無いドメインはスキップされます。必要に応じて先に `npm run collect` を実行してください。
+- CSV に含まれないメールアドレスの扱いはデフォルトで「非デリバラブル」として処理されます。
+
 ### 3. 会社 Web サイト・ファビコン URL の推定（任意）
 
 Web ダッシュボードで会社のロゴやサイトへのリンクを表示するために、`companies.website_url` / `companies.favicon_url` を自動推定できます。
@@ -308,12 +320,26 @@ npm run dev
 - `web/lib/db.ts` に記載の通り、アプリケーションルート（`web/`）から見て `../data/jordan.sqlite` を開きます。
   - そのため、CLI から生成した SQLite ファイルをリポジトリ直下の `data/jordan.sqlite` に配置しておく必要があります。
 
-### 画面構成
+### 画面構成・機能
 
-- `/` … トップページ。Jordan のリードインテリジェンス概要と、各一覧ページへの導線を表示。
-- `/companies` … 会社一覧。ドメイン・会社名などでフィルタし、優先すべきターゲット企業を確認できます。
-- `/contacts` … 担当者一覧。`contacts` と `email_candidates` テーブルをもとに、deliverable なメールアドレスを含む担当者を検索できます。
-- `/contacts/[id]` … 担当者詳細。1 人の担当者に紐づく送信候補メールアドレス（deliverable のものを優先）を表示します。
+- `/` … Jordan の概要と主要ページへの導線を表示。
+- `/companies`
+  - 会社名／ドメインで検索。favicon / Web サイトリンク付きで表示。
+  - Contacts 件数・作成／更新日時を確認でき、行クリックで該当ドメインの Contacts 一覧へ遷移します。
+- `/contacts`
+  - 会社名・ドメイン・役職・部署で検索、送信可能メールの有無（with / without / all）でフィルタ。
+  - `companyDomain` など主要カラムでソート＆ページネーション（20件ずつ）。
+  - テーブル／カード表示を切り替え可能。どちらもメールアドレスのコピー操作に対応し、行クリックで詳細ページへ。
+  - 現在のソート／フィルタ条件を維持したまま CSV エクスポートが可能。
+- `/contacts/[id]`
+  - 担当者詳細と、EmailHippo 判定・confidence・理由付きのメール候補一覧を表示（送信可能な候補のみ）。
+
+### Web 側の API エンドポイント
+
+- `GET /api/contacts?limit=100&domain=...&emails=with|without|all`  
+  Contacts の JSON を返します（最大 500 件まで `limit` 指定可）。
+- `GET /api/contacts/export?sort=companyDomain&direction=asc&domain=...&emails=...`  
+  現在のソート・フィルタ条件を反映した CSV をダウンロードします（ソート可能カラム: `companyName`, `companyDomain`, `name`, `position`, `department`）。
 
 ### 注意事項
 
