@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { FiUsers, FiBriefcase, FiLayout } from "react-icons/fi";
 
 function navLinkClass(base: string, active: boolean): string {
   if (active) {
@@ -14,7 +15,7 @@ function navLinkClass(base: string, active: boolean): string {
 export function SidebarNav() {
   const pathname = usePathname();
 
-  const baseLinkClass = "rounded-md px-3 py-3";
+  const baseLinkClass = "rounded-md px-3 py-3 flex items-center gap-2";
 
   const isDashboard = pathname === "/";
   const isContacts = pathname.startsWith("/contacts");
@@ -32,18 +33,21 @@ export function SidebarNav() {
           href="/"
           className={navLinkClass(baseLinkClass, isDashboard)}
         >
+          <FiLayout className="h-4 w-4" aria-hidden />
           ダッシュボード
         </Link>
         <Link
           href="/contacts"
           className={navLinkClass(baseLinkClass, isContacts)}
         >
+          <FiUsers className="h-4 w-4" aria-hidden />
           コンタクト
         </Link>
         <Link
           href="/companies"
           className={navLinkClass(baseLinkClass, isCompanies)}
         >
+          <FiBriefcase className="h-4 w-4" aria-hidden />
           会社
         </Link>
       </nav>

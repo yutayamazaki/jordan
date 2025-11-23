@@ -1,16 +1,16 @@
 "use client";
-
-import { useState, type MouseEvent } from "react";
-import Link from "next/link";
-import { FiCopy } from "react-icons/fi";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type {
   ContactListItem,
   ContactSortField,
   SortDirection,
-  DeliverableEmailsFilter
+  DeliverableEmailsFilter,
+  ContactDetail
 } from "@/lib/contacts";
 import { Button } from "@/components/ui/button";
 import { ContactsTable } from "./contacts-table";
+import { EmailCandidatesTable } from "./email-candidates-table";
 
 type ContactsViewProps = {
   contacts: ContactListItem[];
@@ -18,38 +18,99 @@ type ContactsViewProps = {
   sortDirection: SortDirection;
   domainQuery?: string;
   emailsFilter: DeliverableEmailsFilter;
+  initialSelectedId?: string | null;
 };
-
-type ViewMode = "table" | "card";
 
 export function ContactsView({
   contacts,
   sortField,
   sortDirection,
   domainQuery,
-  emailsFilter
+  emailsFilter,
+  initialSelectedId
 }: ContactsViewProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("card");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialSelectedId ?? null
+  );
+  const [detail, setDetail] = useState<ContactDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
 
-  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedId(initialSelectedId ?? null);
+  }, [initialSelectedId]);
 
-  const handleCopy = async (
-    event: MouseEvent<HTMLButtonElement>,
-    email: string
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
+  useEffect(() => {
+    if (!selectedId) return;
 
-    try {
-      await navigator.clipboard.writeText(email);
-      setCopiedEmail(email);
-      window.setTimeout(() => {
-        setCopiedEmail((current) => (current === email ? null : current));
-      }, 1500);
-    } catch (error) {
-      console.error("Failed to copy email to clipboard", error);
+    const existsInList = contacts.some((c) => c.id === selectedId);
+
+    // When opened via URL (initialSelectedId), keep the side peek open even if
+    // the contact is not part of the current page of results.
+    if (existsInList || initialSelectedId) return;
+
+    setSelectedId(null);
+    setDetail(null);
+    setError(null);
+  }, [contacts, selectedId, initialSelectedId]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDetail(null);
+      setError(null);
+      return;
     }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetch(`/api/contact?contactId=${encodeURIComponent(selectedId)}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? "Failed to fetch contact detail");
+        }
+        return res.json() as Promise<ContactDetail>;
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setDetail(data);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to fetch");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
+
+  const formatDate = (value: number | null) =>
+    value ? new Date(value).toLocaleDateString("ja-JP") : "-";
+
+  const handleSelect = (id: string | null) => {
+    setSelectedId(id);
+
+    const queryString = searchParams.toString();
+    const basePath = id ? `/contacts/${id}` : "/contacts";
+    router.push(queryString ? `${basePath}?${queryString}` : basePath);
   };
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [selectedId, detail?.contact.companyLogoUrl]);
 
   return (
     <div className="space-y-3">
@@ -71,7 +132,6 @@ export function ContactsView({
             defaultValue={emailsFilter}
             className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
           >
-            <option value="all">送信可能メール: すべて</option>
             <option value="with">送信可能メール: あり</option>
             <option value="without">送信可能メール: なし</option>
           </select>
@@ -81,142 +141,120 @@ export function ContactsView({
             検索
           </Button>
         </form>
-
-        <div className="flex items-center justify-end gap-2 text-xs">
-          <span className="text-slate-500">表示形式</span>
-          <div className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5">
-            <Button
-              type="button"
-              variant={viewMode === "table" ? "primary" : "ghost"}
-              className="h-7 px-3 py-0 text-xs"
-              onClick={() => setViewMode("table")}
-            >
-              テーブル
-            </Button>
-            <Button
-              type="button"
-              variant={viewMode === "card" ? "primary" : "ghost"}
-              className="h-7 px-3 py-0 text-xs"
-              onClick={() => setViewMode("card")}
-            >
-              カード
-            </Button>
-          </div>
-        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-        {viewMode === "table" ? (
-          <ContactsTable
-            contacts={contacts}
-            sortField={sortField}
-            sortDirection={sortDirection}
-          />
-        ) : (
-          <div className="p-4">
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {contacts.map((c) => {
-              const emails =
-                c.deliverableEmails
-                  ?.split("\n")
-                  .map((email) => email.trim())
-                  .filter((email) => email.length > 0) ?? [];
-
-              return (
-                <Link
-                  key={c.id}
-                  href={`/contacts/${c.id}`}
-                  className="flex flex-col rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <div className="mb-2">
-                    <div className="flex items-center gap-2">
-                      {c.companyFaviconUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={c.companyFaviconUrl}
-                          alt=""
-                          className="h-6 w-6 rounded-sm"
-                        />
-                      ) : (
-                        <span className="inline-block h-6 w-6 rounded-sm bg-slate-200" />
-                      )}
-                      <div className="text-xs font-semibold tracking-wide text-slate-500">
-                        {c.companyName}
-                      </div>
-                    </div>
-                    <div className="font-mono text-xs text-slate-600">
-                      {c.companyDomain}
-                    </div>
-                  </div>
-                  <div className="mb-2">
-                    <div className="text-sm font-medium text-slate-900">
-                      {c.name}
-                    </div>
-                    <div className="text-xs text-slate-600">{c.position}</div>
-                    <div className="text-xs text-slate-600">{c.department}</div>
-                  </div>
-                  <div className="mb-2 space-y-0.5 text-[11px] text-slate-500">
-                    <div>
-                      <span className="inline-block w-14">作成</span>
-                      <span>
-                        {c.createdAt
-                          ? new Date(c.createdAt).toLocaleString("ja-JP")
-                          : "-"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="inline-block w-14">更新</span>
-                      <span>
-                        {c.updatedAt
-                          ? new Date(c.updatedAt).toLocaleString("ja-JP")
-                          : "-"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-auto pt-2 text-xs text-slate-600">
-                    <div className="mb-1 font-semibold text-slate-700">
-                      送信可能メール
-                    </div>
-                    {emails.length === 0 ? (
-                      <span className="text-slate-400">-</span>
-                    ) : (
-                      <ul className="space-y-0.5">
-                        {emails.map((email) => (
-                          <li
-                            key={email}
-                            className="flex items-center gap-2 font-mono text-[11px]"
-                          >
-                            <span className="truncate">{email}</span>
-                            <button
-                              type="button"
-                              onClick={(event) => handleCopy(event, email)}
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-md bg-transparent p-0 text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <span className="sr-only">
-                                メールアドレスをコピー
-                              </span>
-                              <FiCopy
-                                aria-hidden="true"
-                                className="h-3 w-3"
-                              />
-                            </button>
-                            {copiedEmail === email && (
-                              <span className="text-[11px] text-emerald-600">
-                                Copied
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-            </div>
-          </div>
-        )}
+        <ContactsTable
+          contacts={contacts}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          selectedId={selectedId}
+          onSelect={handleSelect}
+        />
       </div>
+      {selectedId && (
+        <div className="fixed inset-y-0 right-0 z-30 w-[560px] max-w-full border-l border-slate-200 bg-white/95 shadow-xl backdrop-blur">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-800">Contact Info</h3>
+            <button
+              type="button"
+              onClick={() => handleSelect(null)}
+              className="text-xs text-slate-500 hover:text-slate-700"
+            >
+              閉じる
+            </button>
+          </div>
+          <div className="flex h-[calc(100%-56px)] flex-col overflow-y-auto px-4 py-3 text-sm">
+            {loading ? (
+              <p className="text-slate-500">読み込み中...</p>
+            ) : error ? (
+              <p className="text-rose-600">{error}</p>
+                ) : detail ? (
+                  <>
+                    <section className="space-y-2">
+                      <div className="flex items-start gap-3">
+                    {detail.contact.companyLogoUrl && !logoError ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={detail.contact.companyLogoUrl}
+                        alt={`${detail.contact.companyName} logo`}
+                        className="h-12 w-12 rounded-md bg-white object-contain ring-1 ring-slate-200"
+                        onError={() => setLogoError(true)}
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold uppercase text-slate-600">
+                        {detail.contact.companyName.slice(0, 1)}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">氏名</p>
+                      <p className="text-base font-semibold text-slate-900">
+                        {detail.contact.name}
+                      </p>
+                      <p className="text-[13px] text-slate-600">
+                        {detail.contact.companyName}
+                        {detail.contact.companyDomain && (
+                          <span className="ml-2 font-mono text-xs text-slate-500">
+                            {detail.contact.companyDomain}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm text-slate-700">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        役職
+                      </p>
+                      <p>{detail.contact.position ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        部署
+                      </p>
+                      <p>{detail.contact.department ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        作成日
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {formatDate(detail.contact.createdAt)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        更新日
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {formatDate(detail.contact.updatedAt)}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      メール候補
+                    </h4>
+                    <span className="text-[11px] text-slate-500">
+                      {detail.emailCandidates.length}件
+                    </span>
+                  </div>
+                  {detail.emailCandidates.length === 0 ? (
+                    <p className="text-sm text-slate-500">メール候補がありません</p>
+                  ) : (
+                    <EmailCandidatesTable emailCandidates={detail.emailCandidates} />
+                  )}
+                </section>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">担当者を選択してください</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

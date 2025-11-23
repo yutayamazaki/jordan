@@ -31,14 +31,14 @@ function parseSortParams(url: string): {
 
   const emailsParam = searchParams.get("emails");
   const emailsFilter: DeliverableEmailsFilter =
-    emailsParam === "with" || emailsParam === "without" ? emailsParam : "all";
+    emailsParam === "with" || emailsParam === "without" ? emailsParam : "with";
 
   return { sortField, sortDirection, emailsFilter };
 }
 
-function escapeCsvValue(value: string | null): string {
+function escapeCsvValue(value: string | number | boolean | null | undefined): string {
   if (value == null) return "";
-  const str = value.replace(/"/g, '""');
+  const str = String(value).replace(/"/g, '""');
   return `"${str}"`;
 }
 
@@ -56,21 +56,12 @@ export async function GET(request: Request) {
     emailsFilter
   );
 
-  const header = [
-    "id",
-    "name",
-    "position",
-    "department",
-    "companyName",
-    "companyDomain",
-    "deliverableEmails"
-  ];
+  const header = ["name", "position", "department", "company", "domain", "email"];
 
   const records: string[][] = [];
 
   for (const c of contacts) {
     const baseFields = [
-      c.id,
       c.name,
       c.position,
       c.department,

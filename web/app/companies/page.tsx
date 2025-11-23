@@ -1,4 +1,11 @@
-import { listCompanies, countCompanies } from "@/lib/companies";
+import {
+  listCompanies,
+  countCompanies,
+  type CompanySortKey,
+  type SortOrder,
+  DEFAULT_COMPANY_SORT_KEY,
+  DEFAULT_COMPANY_SORT_ORDER,
+} from "@/lib/companies";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CompaniesTable } from "./companies-table";
@@ -6,14 +13,20 @@ import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-type CompaniesPageProps = {
+export type CompaniesPageProps = {
   searchParams?: {
     page?: string;
     domain?: string;
+    sort?: string;
+    order?: string;
   };
+  initialSelectedId?: string | null;
 };
 
-export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
+export function CompaniesPageContent({
+  searchParams,
+  initialSelectedId
+}: CompaniesPageProps) {
   const pageSize = 20;
 
   const domainParam = searchParams?.domain;
@@ -32,6 +45,26 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
   }
 
   const offset = (page - 1) * pageSize;
+
+  const allowedSortKeys: CompanySortKey[] = [
+    "name",
+    "domain",
+    "websiteUrl",
+    "contactCount",
+    "createdAt",
+    "updatedAt",
+  ];
+
+  const sortKey: CompanySortKey = allowedSortKeys.includes(
+    (searchParams?.sort as CompanySortKey) ?? DEFAULT_COMPANY_SORT_KEY,
+  )
+    ? ((searchParams?.sort as CompanySortKey) ?? DEFAULT_COMPANY_SORT_KEY)
+    : DEFAULT_COMPANY_SORT_KEY;
+
+  const sortOrder: SortOrder =
+    searchParams?.order === "desc" || searchParams?.order === "asc"
+      ? searchParams.order
+      : DEFAULT_COMPANY_SORT_ORDER;
 
   const pageItems: (number | "ellipsis")[] = [];
 
@@ -69,13 +102,45 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
     }
   }
 
-  const companies = listCompanies(pageSize, offset, domainQuery);
+  const companies = listCompanies(pageSize, offset, domainQuery, {
+    key: sortKey,
+    order: sortOrder,
+  });
+
+  const buildQueryString = (params: {
+    page?: number;
+    domain?: string;
+    sortKey?: CompanySortKey;
+    sortOrder?: SortOrder;
+  }) => {
+    const query = new URLSearchParams();
+
+    const nextSortKey = params.sortKey ?? sortKey;
+    const nextSortOrder = params.sortOrder ?? sortOrder;
+
+    if (params.page && params.page > 1) {
+      query.set("page", String(params.page));
+    }
+    if (params.domain) {
+      query.set("domain", params.domain);
+    }
+    if (searchParams?.sort || nextSortKey !== DEFAULT_COMPANY_SORT_KEY) {
+      query.set("sort", nextSortKey);
+    }
+    if (searchParams?.order || nextSortOrder !== DEFAULT_COMPANY_SORT_ORDER) {
+      query.set("order", nextSortOrder);
+    }
+
+    const queryString = query.toString();
+
+    return queryString ? `?${queryString}` : "";
+  };
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Companies"
-        description="Jordan が収集した会社の一覧です。"
+        title="All Companies"
+        description=""
       />
       <form
         action="/companies"
@@ -89,12 +154,7 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
           placeholder="会社名 または ドメイン"
           className="h-8 w-64 rounded-md border border-slate-300 bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
         />
-        <button
-          type="submit"
-          className="inline-flex h-8 items-center rounded-md bg-slate-900 px-3 text-xs font-medium text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
-        >
-          検索
-        </button>
+        <Button type="submit" variant="secondary">検索</Button>
       </form>
       {companies.length === 0 ? (
         <EmptyState
@@ -103,7 +163,13 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
         />
       ) : (
         <>
-          <CompaniesTable companies={companies} />
+          <CompaniesTable
+            companies={companies}
+            sortKey={sortKey}
+            sortOrder={sortOrder}
+            domainQuery={domainQuery}
+            initialSelectedId={initialSelectedId}
+          />
           <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
             <span>
               {totalCount === 0
@@ -119,12 +185,17 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
                 <a
                   href={
                     page <= 1
-                      ? `/companies${domainQuery ? `?domain=${encodeURIComponent(domainQuery)}` : ""}`
-                      : `/companies?page=${page - 1}${
-                          domainQuery
-                            ? `&domain=${encodeURIComponent(domainQuery)}`
-                            : ""
-                        }`
+                      ? `/companies${buildQueryString({
+                          domain: domainQuery,
+                          sortKey,
+                          sortOrder,
+                        })}`
+                      : `/companies${buildQueryString({
+                          page: page - 1,
+                          domain: domainQuery,
+                          sortKey,
+                          sortOrder,
+                        })}`
                   }
                 >
                   前へ
@@ -140,18 +211,12 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
                     (() => {
                       const targetPage = item;
                       const isCurrent = targetPage === page;
-                      const href =
-                        targetPage === 1
-                          ? `/companies${
-                              domainQuery
-                                ? `?domain=${encodeURIComponent(domainQuery)}`
-                                : ""
-                            }`
-                          : `/companies?page=${targetPage}${
-                              domainQuery
-                                ? `&domain=${encodeURIComponent(domainQuery)}`
-                                : ""
-                            }`;
+                      const href = `/companies${buildQueryString({
+                        page: targetPage,
+                        domain: domainQuery,
+                        sortKey,
+                        sortOrder,
+                      })}`;
 
                       return (
                         <Button
@@ -175,16 +240,18 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
                 <a
                   href={
                     page >= totalPages
-                      ? `/companies?page=${totalPages}${
-                          domainQuery
-                            ? `&domain=${encodeURIComponent(domainQuery)}`
-                            : ""
-                        }`
-                      : `/companies?page=${page + 1}${
-                          domainQuery
-                            ? `&domain=${encodeURIComponent(domainQuery)}`
-                            : ""
-                        }`
+                      ? `/companies${buildQueryString({
+                          page: totalPages,
+                          domain: domainQuery,
+                          sortKey,
+                          sortOrder,
+                        })}`
+                      : `/companies${buildQueryString({
+                          page: page + 1,
+                          domain: domainQuery,
+                          sortKey,
+                          sortOrder,
+                        })}`
                   }
                 >
                   次へ
@@ -196,4 +263,8 @@ export default function CompaniesPage({ searchParams }: CompaniesPageProps) {
       )}
     </div>
   );
+}
+
+export default function CompaniesPage(props: CompaniesPageProps) {
+  return <CompaniesPageContent {...props} />;
 }

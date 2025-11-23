@@ -1,0 +1,29 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Virtual environments / tools
+.venv/
+venv/
+env/
+.python-version
+
+# Test coverage / artifacts
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+
+# Build outputs / packaging
+build/
+dist/
+*.egg-info/
+
+# Env files / OS noise
+.env
+.env.*
+.DS_Store

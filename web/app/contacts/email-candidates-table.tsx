@@ -41,7 +41,6 @@ export function EmailCandidatesTable({
           <TableRow>
             <TableHead>メール</TableHead>
             <TableHead>Email Hippo</TableHead>
-            <TableHead>信頼性</TableHead>
             <TableHead>判定理由</TableHead>
           </TableRow>
         </TableHeader>
@@ -72,9 +71,6 @@ export function EmailCandidatesTable({
                     {e.isDeliverable ? "送信可能" : "送信不可"}
                   </Badge>
                 )}
-              </TableCell>
-              <TableCell className="text-sm">
-                {e.confidence.toFixed(2)}
               </TableCell>
               <TableCell className="text-sm">
                 {e.verificationReason ?? "-"}

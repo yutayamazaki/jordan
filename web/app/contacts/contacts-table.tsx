@@ -17,26 +17,30 @@ import {
   TableRow
 } from "@/components/ui/table";
 
+const formatDate = (value: number | null) =>
+  value ? new Date(value).toLocaleDateString("ja-JP") : "-";
+
 type ContactsTableProps = {
   contacts: ContactListItem[];
   sortField: ContactSortField;
   sortDirection: SortDirection;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 };
 
 export function ContactsTable({
   contacts,
   sortField,
-  sortDirection
+  sortDirection,
+  selectedId,
+  onSelect
 }: ContactsTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
-
-  const handleRowClick = (id: string) => {
-    router.push(`/contacts/${id}`);
-  };
+  const [rowLogoErrors, setRowLogoErrors] = useState<Record<string, boolean>>({});
 
   const handleCopy = async (event: MouseEvent<HTMLButtonElement>, email: string) => {
     event.stopPropagation();
@@ -65,11 +69,18 @@ export function ContactsTable({
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  const renderHeader = (label: string, field: ContactSortField) => {
-    const isActive = sortField === field;
-    const directionSymbol =
-      !isActive ? "" : sortDirection === "asc" ? "↑" : "↓";
+  const renderSortIndicator = (field: ContactSortField) => {
+    if (sortField !== field) {
+      return <span className="text-slate-400">↕</span>;
+    }
+    return (
+      <span className="text-slate-600">
+        {sortDirection === "asc" ? "▲" : "▼"}
+      </span>
+    );
+  };
 
+  const renderHeader = (label: string, field: ContactSortField) => {
     return (
       <button
         type="button"
@@ -77,7 +88,7 @@ export function ContactsTable({
         className="flex items-center gap-1 text-xs font-semibold tracking-wide text-slate-500 hover:text-slate-700"
       >
         <span>{label}</span>
-        {directionSymbol && <span>{directionSymbol}</span>}
+        {renderSortIndicator(field)}
       </button>
     );
   };
@@ -86,14 +97,11 @@ export function ContactsTable({
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead>{renderHeader("氏名", "name")}</TableHead>
           <TableHead>{renderHeader("会社名", "companyName")}</TableHead>
-          <TableHead>{renderHeader("ドメイン", "companyDomain")}</TableHead>
-          <TableHead>{renderHeader("名前", "name")}</TableHead>
-          <TableHead>{renderHeader("役職", "position")}</TableHead>
-          <TableHead>{renderHeader("部署", "department")}</TableHead>
-          <TableHead>送信可能メール</TableHead>
-          <TableHead>{renderHeader("作成日時", "createdAt")}</TableHead>
-          <TableHead>{renderHeader("更新日時", "updatedAt")}</TableHead>
+          <TableHead>メール</TableHead>
+          <TableHead>{renderHeader("作成日", "createdAt")}</TableHead>
+          <TableHead>{renderHeader("更新日", "updatedAt")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -104,38 +112,40 @@ export function ContactsTable({
           return (
             <TableRow
               key={c.id}
-              className="cursor-pointer"
+              className={`cursor-pointer ${selectedId === c.id ? "bg-slate-100" : ""}`}
               role="button"
               tabIndex={0}
-              onClick={() => handleRowClick(c.id)}
+              onClick={() => onSelect(c.id)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  handleRowClick(c.id);
+                  onSelect(c.id);
                 }
               }}
             >
               <TableCell>
+                {c.name}
+              </TableCell>
+              <TableCell>
                 <div className="flex items-center gap-2">
-                  {c.companyFaviconUrl ? (
+                  {c.companyLogoUrl && !rowLogoErrors[c.id] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={c.companyFaviconUrl}
-                      alt=""
-                      className="h-5 w-5 rounded-sm"
+                      src={c.companyLogoUrl}
+                      alt={`${c.companyName} logo`}
+                      className="h-7 w-7 rounded-md bg-white object-contain ring-1 ring-slate-200"
+                      onError={() =>
+                        setRowLogoErrors((prev) => ({ ...prev, [c.id]: true }))
+                      }
                     />
                   ) : (
-                    <span className="inline-block h-5 w-5 rounded-sm bg-slate-200" />
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-200 text-[11px] font-semibold uppercase text-slate-600">
+                      {c.companyName.slice(0, 1)}
+                    </span>
                   )}
                   <span>{c.companyName}</span>
                 </div>
               </TableCell>
-              <TableCell className="font-mono text-sm text-slate-600">
-                {c.companyDomain}
-              </TableCell>
-              <TableCell>{c.name}</TableCell>
-              <TableCell>{c.position}</TableCell>
-              <TableCell>{c.department}</TableCell>
               <TableCell className="text-sm text-slate-700">
                 {emails.length === 0 ? (
                   "-"
@@ -161,14 +171,10 @@ export function ContactsTable({
                 )}
               </TableCell>
               <TableCell className="text-xs text-slate-600">
-                {c.createdAt
-                  ? new Date(c.createdAt).toLocaleString("ja-JP")
-                  : "-"}
+                {formatDate(c.createdAt)}
               </TableCell>
               <TableCell className="text-xs text-slate-600">
-                {c.updatedAt
-                  ? new Date(c.updatedAt).toLocaleString("ja-JP")
-                  : "-"}
+                {formatDate(c.updatedAt)}
               </TableCell>
             </TableRow>
           );

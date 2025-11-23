@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-type ContactsPageProps = {
+export type ContactsPageProps = {
   searchParams?: {
     page?: string;
     sort?: string;
@@ -21,9 +21,13 @@ type ContactsPageProps = {
     domain?: string;
     emails?: string;
   };
+  initialSelectedId?: string | null;
 };
 
-export default function ContactsPage({ searchParams }: ContactsPageProps) {
+export function ContactsPageContent({
+  searchParams,
+  initialSelectedId
+}: ContactsPageProps) {
   const pageSize = 20;
 
   const sortParam = searchParams?.sort;
@@ -49,7 +53,7 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
     domainParam && domainParam.trim().length > 0 ? domainParam.trim() : undefined;
 
   const emailsFilter: DeliverableEmailsFilter =
-    emailsParam === "with" || emailsParam === "without" ? emailsParam : "all";
+    emailsParam === "with" || emailsParam === "without" ? emailsParam : "with";
 
   const totalCount = countContacts(domainQuery, emailsFilter);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -112,16 +116,14 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Contacts"
-        description="Jordan が収集した担当者情報の一覧です。"
+        title="All Contacts"
+        description=""
         actions={
           <Button asChild variant="secondary">
             <Link
               href={`/api/contacts/export?sort=${sortField}&direction=${sortDirection}${
                 domainQuery ? `&domain=${encodeURIComponent(domainQuery)}` : ""
-              }${
-                emailsFilter !== "all" ? `&emails=${emailsFilter}` : ""
-              }`}
+              }&emails=${emailsFilter}`}
               prefetch={false}
             >
               CSVエクスポート
@@ -142,6 +144,7 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
             sortDirection={sortDirection}
             domainQuery={domainQuery}
             emailsFilter={emailsFilter}
+            initialSelectedId={initialSelectedId}
           />
           <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
             <span>
@@ -162,20 +165,12 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
                           domainQuery
                             ? `&domain=${encodeURIComponent(domainQuery)}`
                             : ""
-                        }${
-                          emailsFilter !== "all"
-                            ? `&emails=${emailsFilter}`
-                            : ""
-                        }`
+                        }&emails=${emailsFilter}`
                       : `/contacts?page=${page - 1}&sort=${sortField}&direction=${sortDirection}${
                           domainQuery
                             ? `&domain=${encodeURIComponent(domainQuery)}`
                             : ""
-                        }${
-                          emailsFilter !== "all"
-                            ? `&emails=${emailsFilter}`
-                            : ""
-                        }`
+                        }&emails=${emailsFilter}`
                   }
                 >
                   前へ
@@ -197,9 +192,7 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
                         (domainQuery
                           ? `&domain=${encodeURIComponent(domainQuery)}`
                           : "") +
-                        (emailsFilter !== "all"
-                          ? `&emails=${emailsFilter}`
-                          : "");
+                        `&emails=${emailsFilter}`;
 
                       return (
                         <Button
@@ -227,20 +220,12 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
                           domainQuery
                             ? `&domain=${encodeURIComponent(domainQuery)}`
                             : ""
-                        }${
-                          emailsFilter !== "all"
-                            ? `&emails=${emailsFilter}`
-                            : ""
-                        }`
+                        }&emails=${emailsFilter}`
                       : `/contacts?page=${page + 1}&sort=${sortField}&direction=${sortDirection}${
                           domainQuery
                             ? `&domain=${encodeURIComponent(domainQuery)}`
                             : ""
-                        }${
-                          emailsFilter !== "all"
-                            ? `&emails=${emailsFilter}`
-                            : ""
-                        }`
+                        }&emails=${emailsFilter}`
                   }
                 >
                   次へ
@@ -252,4 +237,8 @@ export default function ContactsPage({ searchParams }: ContactsPageProps) {
       )}
     </div>
   );
+}
+
+export default function ContactsPage(props: ContactsPageProps) {
+  return <ContactsPageContent {...props} />;
 }

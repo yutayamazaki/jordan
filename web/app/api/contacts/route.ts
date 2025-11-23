@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   }
 
   const emailsFilter: DeliverableEmailsFilter =
-    emailsParam === "with" || emailsParam === "without" ? emailsParam : "all";
+    emailsParam === "with" || emailsParam === "without" ? emailsParam : "with";
 
   const contacts = listContacts(
     limit,

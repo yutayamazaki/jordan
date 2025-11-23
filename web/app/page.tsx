@@ -23,10 +23,7 @@ export default function HomePage() {
       <section className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col justify-between rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm">
           <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-slate-900">Companies</h2>
-            <p className="text-xs text-slate-600">
-              Jordan が収集した会社情報を一覧・検索し、ターゲット企業の優先度を確認できます。
-            </p>
+            <h2 className="text-sm font-semibold text-slate-900">All Companies</h2>
           </div>
           <div className="mt-4">
             <Button asChild variant="primary" className="h-8 px-3 text-xs">

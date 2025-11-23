@@ -12,6 +12,7 @@ export const companies = sqliteTable("companies", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     websiteUrl: text("website_url"), // 代表サイト
+    logoUrl: text("logo_url"), // 会社サイトのロゴ画像URL
     description: text("description"),
     industry: text("industry"),
     country: text("country"),
