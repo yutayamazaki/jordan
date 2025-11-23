@@ -1,6 +1,7 @@
 import {
   listCompanies,
   countCompanies,
+  listIndustries,
   type CompanySortKey,
   type SortOrder,
   DEFAULT_COMPANY_SORT_KEY,
@@ -17,6 +18,7 @@ export type CompaniesPageProps = {
   searchParams?: {
     page?: string;
     domain?: string;
+    industries?: string | string[];
     sort?: string;
     order?: string;
   };
@@ -28,12 +30,23 @@ export function CompaniesPageContent({
   initialSelectedId
 }: CompaniesPageProps) {
   const pageSize = 100;
+  const industryOptions = listIndustries();
 
   const domainParam = searchParams?.domain;
   const domainQuery =
     domainParam && domainParam.trim().length > 0 ? domainParam.trim() : undefined;
+  const industriesParam = searchParams?.industries;
+  const industryQueryList = (
+    Array.isArray(industriesParam)
+      ? industriesParam
+      : industriesParam
+        ? industriesParam.split(",")
+        : []
+  )
+    .map((i) => i.trim())
+    .filter((i) => i.length > 0);
 
-  const totalCount = countCompanies(domainQuery);
+  const totalCount = countCompanies(domainQuery, industryQueryList);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   let page = Number(searchParams?.page ?? "1");
@@ -49,6 +62,7 @@ export function CompaniesPageContent({
   const allowedSortKeys: CompanySortKey[] = [
     "name",
     "domain",
+    "industry",
     "websiteUrl",
     "contactCount",
     "createdAt",
@@ -102,14 +116,21 @@ export function CompaniesPageContent({
     }
   }
 
-  const companies = listCompanies(pageSize, offset, domainQuery, {
-    key: sortKey,
-    order: sortOrder,
-  });
+  const companies = listCompanies(
+    pageSize,
+    offset,
+    domainQuery,
+    {
+      key: sortKey,
+      order: sortOrder,
+    },
+    industryQueryList
+  );
 
   const buildQueryString = (params: {
     page?: number;
     domain?: string;
+    industries?: string[];
     sortKey?: CompanySortKey;
     sortOrder?: SortOrder;
   }) => {
@@ -123,6 +144,12 @@ export function CompaniesPageContent({
     }
     if (params.domain) {
       query.set("domain", params.domain);
+    }
+    const nextIndustries = params.industries ?? industryQueryList;
+    if (nextIndustries && nextIndustries.length > 0) {
+      for (const ind of nextIndustries) {
+        query.append("industries", ind);
+      }
     }
     if (searchParams?.sort || nextSortKey !== DEFAULT_COMPANY_SORT_KEY) {
       query.set("sort", nextSortKey);
@@ -145,7 +172,7 @@ export function CompaniesPageContent({
       <form
         action="/companies"
         method="get"
-        className="flex items-center gap-2"
+        className="flex flex-wrap items-center gap-2"
       >
         <input
           type="text"
@@ -154,6 +181,25 @@ export function CompaniesPageContent({
           placeholder="会社名 または ドメイン"
           className="h-8 w-64 rounded-md border border-slate-300 bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
         />
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 px-2 py-1">
+          <span className="text-xs text-slate-600">業種:</span>
+          {industryOptions.map((ind) => {
+            const inputId = `industry-${ind}`;
+            return (
+              <label key={ind} htmlFor={inputId} className="flex items-center gap-1 text-sm text-slate-700">
+                <input
+                  id={inputId}
+                  type="checkbox"
+                  name="industries"
+                  value={ind}
+                  defaultChecked={industryQueryList.includes(ind)}
+                  className="h-3 w-3 rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+                />
+                {ind}
+              </label>
+            );
+          })}
+        </div>
         <Button type="submit" variant="secondary">検索</Button>
       </form>
       {companies.length === 0 ? (
@@ -168,6 +214,7 @@ export function CompaniesPageContent({
             sortKey={sortKey}
             sortOrder={sortOrder}
             domainQuery={domainQuery}
+            industries={industryQueryList}
             initialSelectedId={initialSelectedId}
           />
           <div className="mt-3 flex items-center justify-between text-xs text-slate-600">

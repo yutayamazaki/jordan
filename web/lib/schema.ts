@@ -35,13 +35,13 @@ export const domains = sqliteTable("domains", {
     domain: text("domain").notNull(), // example.com
     disposable: integer("disposable", { mode: "boolean" })
       .notNull()
-      .default(false),
+      .default(false), // 使い捨てアドレスなら true
     webmail: integer("webmail", { mode: "boolean" })
       .notNull()
-      .default(false),
+      .default(false), // Gmail, Yahoo 等のWebメールなら true
     acceptAll: integer("accept_all", { mode: "boolean" })
       .notNull()
-      .default(false),
+      .default(false), // 受信許可なら true
     pattern: text("pattern"), // "{first}.{last}@{domain}" 等
     firstSeenAt: integer("first_seen_at", { mode: "timestamp" }),
     lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),

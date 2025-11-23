@@ -4,12 +4,10 @@ import {
   countContacts,
   type ContactSortField,
   type SortDirection,
-  type DeliverableEmailsFilter,
   type DepartmentCategoryFilter,
   type PositionCategoryFilter
 } from "@/lib/contacts";
 import { PageHeader } from "@/components/ui/page-header";
-import { EmptyState } from "@/components/ui/empty-state";
 import { ContactsView } from "./contacts-view";
 import { Button } from "@/components/ui/button";
 
@@ -20,10 +18,9 @@ export type ContactsPageProps = {
     page?: string;
     sort?: string;
     direction?: string;
-    domain?: string;
-    emails?: string;
     departmentCategory?: string;
     positionCategory?: string;
+    companyId?: string;
   };
   initialSelectedId?: string | null;
 };
@@ -36,10 +33,9 @@ export function ContactsPageContent({
 
   const sortParam = searchParams?.sort;
   const directionParam = searchParams?.direction;
-  const domainParam = searchParams?.domain;
-  const emailsParam = searchParams?.emails;
   const departmentCategoryParam = searchParams?.departmentCategory;
   const positionCategoryParam = searchParams?.positionCategory;
+  const companyIdParam = searchParams?.companyId;
 
   const sortField: ContactSortField =
     sortParam === "companyName" ||
@@ -57,12 +53,6 @@ export function ContactsPageContent({
   const sortDirection: SortDirection =
     directionParam === "desc" ? "desc" : "asc";
 
-  const domainQuery =
-    domainParam && domainParam.trim().length > 0 ? domainParam.trim() : undefined;
-
-  const emailsFilter: DeliverableEmailsFilter =
-    emailsParam === "with" || emailsParam === "without" ? emailsParam : "with";
-
   const departmentCategory: DepartmentCategoryFilter =
     departmentCategoryParam && departmentCategoryParam.trim().length > 0
       ? departmentCategoryParam.trim()
@@ -73,11 +63,15 @@ export function ContactsPageContent({
       ? positionCategoryParam.trim()
       : undefined;
 
+  const companyId =
+    companyIdParam && companyIdParam.trim().length > 0
+      ? companyIdParam.trim()
+      : undefined;
+
   const totalCount = countContacts(
-    domainQuery,
-    emailsFilter,
     departmentCategory,
-    positionCategory
+    positionCategory,
+    companyId
   );
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -132,11 +126,42 @@ export function ContactsPageContent({
     offset,
     sortField,
     sortDirection,
-    domainQuery,
-    emailsFilter,
     departmentCategory,
-    positionCategory
+    positionCategory,
+    companyId
   );
+
+  const buildQueryString = (params?: { page?: number; includePage?: boolean }) => {
+    const query = new URLSearchParams();
+    const includePage = params?.includePage ?? true;
+
+    if (includePage) {
+      if (typeof params?.page === "number") {
+        query.set("page", String(params.page));
+      } else if (page > 1) {
+        query.set("page", String(page));
+      }
+    }
+
+    query.set("sort", sortField);
+    query.set("direction", sortDirection);
+
+    if (departmentCategory) {
+      query.set("departmentCategory", departmentCategory);
+    }
+
+    if (positionCategory) {
+      query.set("positionCategory", positionCategory);
+    }
+
+    if (companyId) {
+      query.set("companyId", companyId);
+    }
+
+    const qs = query.toString();
+
+    return qs ? `?${qs}` : "";
+  };
 
   return (
     <div className="space-y-4">
@@ -146,17 +171,7 @@ export function ContactsPageContent({
         actions={
           <Button asChild variant="secondary">
             <Link
-              href={`/api/contacts/export?sort=${sortField}&direction=${sortDirection}${
-                domainQuery ? `&domain=${encodeURIComponent(domainQuery)}` : ""
-              }&emails=${emailsFilter}${
-                departmentCategory
-                  ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
-                  : ""
-              }${
-                positionCategory
-                  ? `&positionCategory=${encodeURIComponent(positionCategory)}`
-                  : ""
-              }`}
+              href={`/api/contacts/export${buildQueryString({ includePage: false })}`}
               prefetch={false}
             >
               CSVエクスポート
@@ -164,150 +179,80 @@ export function ContactsPageContent({
           </Button>
         }
       />
-      {contacts.length === 0 ? (
-        <EmptyState
-          title="Contacts データがありません"
-          description="まずは CLI から collect / score を実行して、担当者情報を収集してください。"
-        />
-      ) : (
-        <>
-          <ContactsView
-            contacts={contacts}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            domainQuery={domainQuery}
-            emailsFilter={emailsFilter}
-            departmentCategory={departmentCategory}
-            positionCategory={positionCategory}
-            initialSelectedId={initialSelectedId}
-          />
-          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
-            <span>
-              {totalCount === 0
-                ? "0件"
-                : `${offset + 1}-${offset + contacts.length} / ${totalCount}件`}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                asChild
-                disabled={page <= 1}
-              >
-                <Link
-                  href={
-                    page <= 1
-                      ? `/contacts?sort=${sortField}&direction=${sortDirection}${
-                         domainQuery
-                           ? `&domain=${encodeURIComponent(domainQuery)}`
-                           : ""
-                       }&emails=${emailsFilter}${
-                         departmentCategory
-                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
-                           : ""
-                        }${
-                          positionCategory
-                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
-                            : ""
-                       }`
-                      : `/contacts?page=${page - 1}&sort=${sortField}&direction=${sortDirection}${
-                          domainQuery
-                            ? `&domain=${encodeURIComponent(domainQuery)}`
-                            : ""
-                       }&emails=${emailsFilter}${
-                         departmentCategory
-                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
-                           : ""
-                        }${
-                          positionCategory
-                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
-                            : ""
-                       }`
-                  }
-                >
-                  前へ
-                </Link>
-              </Button>
-              <div className="flex items-center gap-1">
-                {pageItems.map((item, index) =>
-                  item === "ellipsis" ? (
-                    <span key={`ellipsis-${index}`} className="px-1 text-slate-400">
-                      …
-                    </span>
-                  ) : (
-                    (() => {
-                      const targetPage = item;
-                      const isCurrent = targetPage === page;
-                      const href =
-                        `/contacts?page=${targetPage}` +
-                        `&sort=${sortField}&direction=${sortDirection}` +
-                        (domainQuery
-                          ? `&domain=${encodeURIComponent(domainQuery)}`
-                          : "") +
-                        `&emails=${emailsFilter}` +
-                        (departmentCategory
-                          ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
-                          : "") +
-                        (positionCategory
-                          ? `&positionCategory=${encodeURIComponent(positionCategory)}`
-                          : "");
+      <ContactsView
+        contacts={contacts}
+        sortField={sortField}
+        sortDirection={sortDirection}
+        departmentCategory={departmentCategory}
+        positionCategory={positionCategory}
+        companyId={companyId}
+        initialSelectedId={initialSelectedId}
+      />
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+        <span>
+          {totalCount === 0
+            ? "0件"
+            : `${offset + 1}-${offset + contacts.length} / ${totalCount}件`}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            asChild
+            disabled={page <= 1}
+          >
+            <Link
+              href={
+                page <= 1
+                  ? `/contacts${buildQueryString({ page: 1 })}`
+                  : `/contacts${buildQueryString({ page: page - 1 })}`
+              }
+            >
+              前へ
+            </Link>
+          </Button>
+          <div className="flex items-center gap-1">
+            {pageItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <span key={`ellipsis-${index}`} className="px-1 text-slate-400">
+                  …
+                </span>
+              ) : (
+                (() => {
+                  const targetPage = item;
+                  const isCurrent = targetPage === page;
+                  const href = `/contacts${buildQueryString({ page: targetPage })}`;
 
-                      return (
-                        <Button
-                          key={targetPage}
-                          variant={isCurrent ? "primary" : "secondary"}
-                          asChild
-                          disabled={isCurrent}
-                        >
-                          <Link href={href}>{targetPage}</Link>
-                        </Button>
-                      );
-                    })()
-                  )
-                )}
-              </div>
-              <Button
-                variant="secondary"
-                asChild
-                disabled={page >= totalPages}
-              >
-                <Link
-                  href={
-                    page >= totalPages
-                      ? `/contacts?page=${totalPages}&sort=${sortField}&direction=${sortDirection}${
-                          domainQuery
-                            ? `&domain=${encodeURIComponent(domainQuery)}`
-                            : ""
-                       }&emails=${emailsFilter}${
-                         departmentCategory
-                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
-                           : ""
-                        }${
-                          positionCategory
-                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
-                            : ""
-                       }`
-                      : `/contacts?page=${page + 1}&sort=${sortField}&direction=${sortDirection}${
-                          domainQuery
-                            ? `&domain=${encodeURIComponent(domainQuery)}`
-                            : ""
-                       }&emails=${emailsFilter}${
-                         departmentCategory
-                           ? `&departmentCategory=${encodeURIComponent(departmentCategory)}`
-                           : ""
-                        }${
-                          positionCategory
-                            ? `&positionCategory=${encodeURIComponent(positionCategory)}`
-                            : ""
-                       }`
-                  }
-                >
-                  次へ
-                </Link>
-              </Button>
-            </div>
+                  return (
+                    <Button
+                      key={targetPage}
+                      variant={isCurrent ? "primary" : "secondary"}
+                      asChild
+                      disabled={isCurrent}
+                    >
+                      <Link href={href}>{targetPage}</Link>
+                    </Button>
+                  );
+                })()
+              )
+            )}
           </div>
-        </>
-      )}
+          <Button
+            variant="secondary"
+            asChild
+            disabled={page >= totalPages}
+          >
+            <Link
+              href={
+                page >= totalPages
+                  ? `/contacts${buildQueryString({ page: totalPages })}`
+                  : `/contacts${buildQueryString({ page: page + 1 })}`
+              }
+            >
+              次へ
+            </Link>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

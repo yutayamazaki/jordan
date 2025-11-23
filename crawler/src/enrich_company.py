@@ -1,10 +1,11 @@
 import argparse
+import asyncio
 import sqlite3
 from pathlib import Path
 from typing import Iterable
 
-import pydantic
 import httpx
+from pydantic import BaseModel, TypeAdapter
 from tqdm import tqdm
 
 from src.domains import Company
@@ -12,6 +13,8 @@ from src.enrichers.company import CompanyEnricher
 from src.result import Result
 
 DEFAULT_TIMEOUT_SECONDS = 3.0
+DEFAULT_CONCURRENCY = 20
+DEFAULT_BATCH_SIZE = 100
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "jordan.sqlite"
 
 
@@ -118,6 +121,8 @@ def update_company(
     logo_url: str | None,
     industry: str | None,
     recompute_all: bool,
+    *,
+    commit: bool = True,
 ) -> Result[None, Exception]:
     """logo_url と industry を 1 件ずつ更新する。"""
     try:
@@ -143,17 +148,57 @@ def update_company(
                 """,
                 (logo_url, industry, company_id),
             )
-        conn.commit()
+        if commit:
+            conn.commit()
         return Result.ok(None)
     except Exception as exc:
         return Result.err(exc)
 
 
-def run(
-    db_path: Path, recompute_all: bool = False
+async def _writer(
+    queue: "asyncio.Queue[UpdatePayload | None]",
+    conn: sqlite3.Connection,
+    recompute_all: bool,
+    batch_size: int,
+) -> Result[int, Exception]:
+    """Queue から取得した更新をまとめて commit する。"""
+    updated = 0
+    pending_since_commit = 0
+    try:
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+
+            update_result = update_company(
+                conn,
+                item.company_id,
+                item.logo_url,
+                item.industry,
+                recompute_all=recompute_all,
+                commit=False,
+            )
+            if update_result.is_err():
+                return Result.err(update_result.unwrap_err())
+
+            updated += 1
+            pending_since_commit += 1
+            if pending_since_commit >= batch_size:
+                conn.commit()
+                pending_since_commit = 0
+
+        if pending_since_commit:
+            conn.commit()
+        return Result.ok(updated)
+    except Exception as exc:
+        return Result.err(exc)
+
+
+async def run_async(
+    db_path: Path, recompute_all: bool = False, concurrency: int = DEFAULT_CONCURRENCY
 ) -> Result[int, Exception]:
     """
-    DB から企業を逐次取得し、favicon と業種を探索し次第 DB に書き戻す。
+    DB から企業を取得し、favicon と業種を並列で探索して DB にバッチ書き戻しする。
     """
     try:
         conn = sqlite3.connect(db_path)
@@ -172,47 +217,107 @@ def run(
 
     try:
         only_missing = not recompute_all
-        total = count_pending(conn, only_missing=only_missing)
-        updated = 0
-        with httpx.Client(
-            timeout=DEFAULT_TIMEOUT_SECONDS,
-            headers={"User-Agent": "jordan-crawler/0.1"},
-        ) as client:
-            enricher = CompanyEnricher(client, recompute_all=recompute_all)
-            progress = tqdm(
-                iter_companies(conn, only_missing=only_missing),
-                total=total,
-                desc="enriching companies",
+        companies = list(iter_companies(conn, only_missing=only_missing))
+        total = len(companies)
+        if total == 0:
+            return Result.ok(0)
+
+        errors: list[tuple[str, str]] = []
+        queue: asyncio.Queue[UpdatePayload | None] = asyncio.Queue()
+        writer_task = asyncio.create_task(
+            _writer(
+                queue,
+                conn,
+                recompute_all=recompute_all,
+                batch_size=DEFAULT_BATCH_SIZE,
             )
-            for company in progress:
-                enriched_result = enricher.enrich(company)
-                if enriched_result.is_err():
-                    return Result.err(enriched_result.unwrap_err())
+        )
+        writer_result: Result[int, Exception] | None = None
+        processing_error: Exception | None = None
 
-                enriched = enriched_result.unwrap()
-                if not enriched.logo_url and not enriched.industry:
-                    continue
+        try:
+            timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS)
+            limits = httpx.Limits(
+                max_connections=concurrency,
+                max_keepalive_connections=concurrency,
+            )
+            async with httpx.AsyncClient(
+                timeout=timeout,
+                headers={"User-Agent": "jordan-crawler/0.1"},
+                limits=limits,
+            ) as client:
+                enricher = CompanyEnricher(client, recompute_all=recompute_all)
+                semaphore = asyncio.Semaphore(max(1, concurrency))
+                progress = tqdm(total=total, desc="enriching companies")
 
-                update_result = update_company(
-                    conn,
-                    company.id,
-                    enriched.logo_url,
-                    enriched.industry,
-                    recompute_all=recompute_all,
-                )
-                if update_result.is_err():
-                    return Result.err(update_result.unwrap_err())
+                async def _process_company(company: Company) -> None:
+                    async with semaphore:
+                        try:
+                            enriched_result = await enricher.enrich(company)
+                            if enriched_result.is_err():
+                                errors.append((company.name or "", str(enriched_result.unwrap_err())))
+                                return
 
-                updated += 1
-                progress.set_postfix(updated=updated, refresh=False)
+                            enriched = enriched_result.unwrap()
+                            if not enriched.logo_url and not enriched.industry:
+                                return
+
+                            await queue.put(
+                                UpdatePayload(
+                                    company_id=company.id,
+                                    logo_url=enriched.logo_url,
+                                    industry=enriched.industry,
+                                )
+                            )
+                        except Exception as exc:
+                            errors.append((company.name or "", str(exc)))
+                        finally:
+                            progress.update(1)
+
+                tasks = [asyncio.create_task(_process_company(company)) for company in companies]
+                for task in asyncio.as_completed(tasks):
+                    await task
+                progress.close()
+        except Exception as exc:
+            processing_error = exc
+        finally:
+            await queue.put(None)
+            writer_result = await writer_task
+
+        if processing_error:
+            return Result.err(processing_error)
+        if writer_result is not None and writer_result.is_err():
+            return Result.err(writer_result.unwrap_err())
+
+        updated = writer_result.unwrap() if writer_result is not None else 0
+        if errors:
+            print(f"Processed with {len(errors)} errors:")
+            for name, message in errors:
+                prefix = f"[{name}]" if name else "[unknown]"
+                print(f"{prefix} {message}")
         return Result.ok(updated)
     finally:
         conn.close()
 
 
-class Args(pydantic.BaseModel):
+def run(
+    db_path: Path, recompute_all: bool = False
+) -> Result[int, Exception]:
+    """同期 API として async 実装をラップする。"""
+    return asyncio.run(run_async(db_path, recompute_all=recompute_all))
+
+
+class Args(BaseModel):
     db: Path = DEFAULT_DB_PATH
     recompute_all: bool = False
+
+
+class UpdatePayload(BaseModel):
+    """DB 更新用キューに積むメッセージ。"""
+
+    company_id: str
+    logo_url: str | None
+    industry: str | None
 
 
 def _parse_args() -> Args:
@@ -238,7 +343,7 @@ def _parse_args() -> Args:
         ),
     )
     parsed_args = parser.parse_args()
-    return Args.model_validate(vars(parsed_args))
+    return TypeAdapter(Args).validate_python(vars(parsed_args))
 
 
 def main() -> None:

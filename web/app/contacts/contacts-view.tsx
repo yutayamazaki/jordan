@@ -5,7 +5,6 @@ import type {
   ContactListItem,
   ContactSortField,
   SortDirection,
-  DeliverableEmailsFilter,
   DepartmentCategoryFilter,
   PositionCategoryFilter,
   ContactDetail
@@ -14,15 +13,15 @@ import { Button } from "@/components/ui/button";
 import { ContactsTable } from "./contacts-table";
 import { EmailCandidatesTable } from "./email-candidates-table";
 import Link from "next/link";
+import { CompanySearchSelect } from "./company-search-select";
 
 type ContactsViewProps = {
   contacts: ContactListItem[];
   sortField: ContactSortField;
   sortDirection: SortDirection;
-  domainQuery?: string;
-  emailsFilter: DeliverableEmailsFilter;
   departmentCategory?: DepartmentCategoryFilter;
   positionCategory?: PositionCategoryFilter;
+  companyId?: string;
   initialSelectedId?: string | null;
 };
 
@@ -30,10 +29,9 @@ export function ContactsView({
   contacts,
   sortField,
   sortDirection,
-  domainQuery,
-  emailsFilter,
   departmentCategory,
   positionCategory,
+  companyId,
   initialSelectedId
 }: ContactsViewProps) {
   const router = useRouter();
@@ -119,33 +117,36 @@ export function ContactsView({
     setLogoError(false);
   }, [selectedId, detail?.contact.companyLogoUrl]);
 
+  const handleFilterChange = (key: string, value: string | null) => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (value && value.trim().length > 0) {
+      params.set(key, value.trim());
+    } else {
+      params.delete(key);
+    }
+
+    params.set("sort", sortField);
+    params.set("direction", sortDirection);
+    params.delete("page");
+
+    const queryString = params.toString();
+    router.push(queryString ? `/contacts?${queryString}` : "/contacts");
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-2 justify-between md:flex-row md:items-center">
-        <form
-          action="/contacts"
-          method="get"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <input
-            type="text"
-            name="domain"
-            defaultValue={domainQuery ?? ""}
-            placeholder="会社名・ドメイン・役職・部署"
-            className="h-8 w-64 rounded-md border border-slate-300 bg-white px-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+        <div className="flex flex-wrap items-center gap-2">
+          <CompanySearchSelect
+            initialCompanyId={companyId}
+            onChange={(value) => handleFilterChange("companyId", value)}
           />
-          <select
-            name="emails"
-            defaultValue={emailsFilter}
-            className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
-          >
-            <option value="with">送信可能メール: あり</option>
-            <option value="without">送信可能メール: なし</option>
-          </select>
           <select
             name="departmentCategory"
             defaultValue={departmentCategory ?? ""}
             className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            onChange={(event) => handleFilterChange("departmentCategory", event.target.value || null)}
           >
             <option value="">全部署カテゴリ</option>
             <option value="経営">経営</option>
@@ -162,6 +163,7 @@ export function ContactsView({
             name="positionCategory"
             defaultValue={positionCategory ?? ""}
             className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            onChange={(event) => handleFilterChange("positionCategory", event.target.value || null)}
           >
             <option value="">全役職カテゴリ</option>
             <option value="経営">経営</option>
@@ -171,12 +173,7 @@ export function ContactsView({
             <option value="担当者">担当者</option>
             <option value="その他">その他</option>
           </select>
-          <input type="hidden" name="sort" value={sortField} />
-          <input type="hidden" name="direction" value={sortDirection} />
-          <Button type="submit" variant="secondary">
-            検索
-          </Button>
-        </form>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">

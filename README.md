@@ -319,27 +319,36 @@ npm run dev
 - デフォルトでは `http://localhost:3000` で起動します。
 - `web/lib/db.ts` に記載の通り、アプリケーションルート（`web/`）から見て `../data/jordan.sqlite` を開きます。
   - そのため、CLI から生成した SQLite ファイルをリポジトリ直下の `data/jordan.sqlite` に配置しておく必要があります。
+  - Web UI は `emails.status = verified_ok` のレコードを前提に表示しており、ある程度スコア済みデータが入っている状態での利用を想定しています。
 
 ### 画面構成・機能
 
 - `/` … Jordan の概要と主要ページへの導線を表示。
 - `/companies`
-  - 会社名／ドメインで検索。favicon / Web サイトリンク付きで表示。
-  - Contacts 件数・作成／更新日時を確認でき、行クリックで該当ドメインの Contacts 一覧へ遷移します。
+  - 会社名／ドメインで検索し、業種は複数選択（チェックボックス）で絞り込み可能。
+  - `name` / `domain` / `industry` / `websiteUrl` / `contactCount` / `createdAt` / `updatedAt` でソート可能（デフォルトは contactCount の降順）。1 ページ 100 件でページネーション。
+  - 行クリックまたは `/companies/[id]` 直アクセスでサイドパネルが開き、業種・Web サイト・想定メールパターン・送信可能メール一覧を確認できます。メールはコピー可能で、選択中ドメインの CSV エクスポートリンク付き。
 - `/contacts`
-  - 会社名・ドメイン・役職・部署で検索、送信可能メールの有無（with / without / all）でフィルタ。
-  - `companyDomain` など主要カラムでソート＆ページネーション（20件ずつ）。
-  - テーブル／カード表示を切り替え可能。どちらもメールアドレスのコピー操作に対応し、行クリックで詳細ページへ。
-  - 現在のソート／フィルタ条件を維持したまま CSV エクスポートが可能。
-- `/contacts/[id]`
-  - 担当者詳細と、EmailHippo 判定・confidence・理由付きのメール候補一覧を表示（送信可能な候補のみ）。
+  - 送信可能メール（EmailHippo で `verified_ok`）を持つ担当者のみを表示。部署カテゴリ／役職カテゴリの絞り込み、送信可能メールを持つ会社のサジェスト検索でフィルタ可能。
+  - `companyDomain`（デフォルト昇順）や `companyName` / `name` / `position` / `department` などでソート可能。1 ページ 100 件でページネーション。
+  - メールアドレスは行内からコピーでき、行クリックまたは `/contacts/[id]` 直アクセスでサイドパネルが開きます。
+  - 詳細パネルでは会社情報とともに、EmailHippo 判定や理由付きのメール候補（送信可能なもののみ）を表示。
+  - ヘッダーの CSV エクスポートは現在のソート・フィルタ条件を反映します。
+- `/contacts/[id]` / `/companies/[id]`
+  - URL 直アクセスでもサイドパネルを開いた状態で一覧を表示できます（ページネーションやフィルタはそのまま利用）。
 
 ### Web 側の API エンドポイント
 
-- `GET /api/contacts?limit=100&domain=...&emails=with|without|all`  
-  Contacts の JSON を返します（最大 500 件まで `limit` 指定可）。
-- `GET /api/contacts/export?sort=companyDomain&direction=asc&domain=...&emails=...`  
-  現在のソート・フィルタ条件を反映した CSV をダウンロードします（ソート可能カラム: `companyName`, `companyDomain`, `name`, `position`, `department`）。
+- `GET /api/contacts?limit=100&departmentCategory=...&positionCategory=...&companyId=...`  
+  送信可能メールを持つ Contacts の JSON を返します（最大 500 件まで `limit` 指定可、ソートは `companyDomain` 昇順固定）。
+- `GET /api/contact?contactId=...`  
+  単一担当者の詳細とメール候補を返します。
+- `GET /api/companies?query=...&companyId=...&limit=20`  
+  会社サジェスト用の JSON を返します（送信可能メールを持つ会社を優先して検索）。
+- `GET /api/company?companyId=...`  
+  会社詳細と紐づくドメイン・送信可能メール一覧を返します。
+- `GET /api/contacts/export?sort=companyDomain&direction=asc&departmentCategory=...&positionCategory=...&companyId=...`  
+  ソート・フィルタ条件を反映した Contacts の CSV を返します（ソートキー: `companyName`, `companyDomain`, `name`, `position`, `positionCategory`, `department`, `departmentCategory`）。
 
 ### 注意事項
 

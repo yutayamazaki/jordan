@@ -1,4 +1,15 @@
-import { and, asc, desc, eq, like, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  like,
+  or,
+  sql,
+  type SQL
+} from "drizzle-orm";
 
 import { getDb } from "./db";
 import { companies, contacts, domains, emails } from "./schema";
@@ -11,6 +22,7 @@ export type CompanyListItem = {
   logoUrl: string | null;
   faviconUrl: string | null;
   contactCount: number;
+  industry: string | null;
   createdAt: number | null;
   updatedAt: number | null;
 };
@@ -18,6 +30,7 @@ export type CompanyListItem = {
 export type CompanySortKey =
   | "name"
   | "domain"
+  | "industry"
   | "websiteUrl"
   | "contactCount"
   | "createdAt"
@@ -27,6 +40,12 @@ export type SortOrder = "asc" | "desc";
 
 export const DEFAULT_COMPANY_SORT_KEY: CompanySortKey = "contactCount";
 export const DEFAULT_COMPANY_SORT_ORDER: SortOrder = "desc";
+
+export type CompanyOption = {
+  id: string;
+  name: string;
+  domain: string | null;
+};
 
 export type CompanyDetail = {
   id: string;
@@ -68,7 +87,8 @@ export function listCompanies(
   limit = 100,
   offset = 0,
   query?: string,
-  sort?: { key: CompanySortKey; order: SortOrder }
+  sort?: { key: CompanySortKey; order: SortOrder },
+  industries?: string[]
 ): CompanyListItem[] {
   const db = getDb();
 
@@ -93,6 +113,13 @@ export function listCompanies(
     );
   }
 
+  if (industries && industries.length > 0) {
+    const normalized = industries.map((i) => i.trim()).filter((i) => i.length > 0);
+    if (normalized.length > 0) {
+      filters.push(inArray(companies.industry, normalized));
+    }
+  }
+
   const contactCountExpr = sql<number>`count(distinct ${emails.contactId})`;
 
   const sortKey = sort?.key ?? DEFAULT_COMPANY_SORT_KEY;
@@ -106,6 +133,7 @@ export function listCompanies(
       websiteUrl: companies.websiteUrl,
       logoUrl: companies.logoUrl,
       faviconUrl: sql<string | null>`null`,
+      industry: companies.industry,
       contactCount: contactCountExpr,
       createdAt: companies.createdAt,
       updatedAt: companies.updatedAt
@@ -122,6 +150,7 @@ export function listCompanies(
       companies.name,
       companies.websiteUrl,
       companies.logoUrl,
+      companies.industry,
       companies.createdAt,
       companies.updatedAt,
       companyDomainsSubquery.domain
@@ -130,6 +159,7 @@ export function listCompanies(
   const sortExprMap: Record<CompanySortKey, SQL<unknown>> = {
     name: companies.name,
     domain: companyDomainsSubquery.domain,
+    industry: companies.industry,
     websiteUrl: companies.websiteUrl,
     contactCount: contactCountExpr,
     createdAt: companies.createdAt,
@@ -150,7 +180,7 @@ export function listCompanies(
   return queryBuilder.all();
 }
 
-export function countCompanies(query?: string): number {
+export function countCompanies(query?: string, industries?: string[]): number {
   const db = getDb();
 
   const filters: SQL<unknown>[] = [];
@@ -174,6 +204,13 @@ export function countCompanies(query?: string): number {
     );
   }
 
+  if (industries && industries.length > 0) {
+    const normalized = industries.map((i) => i.trim()).filter((i) => i.length > 0);
+    if (normalized.length > 0) {
+      filters.push(inArray(companies.industry, normalized));
+    }
+  }
+
   let queryBuilder = db
     .select({ count: sql<number>`count(*)` })
     .from(companies)
@@ -186,6 +223,105 @@ export function countCompanies(query?: string): number {
   const row = queryBuilder.get();
 
   return row?.count ?? 0;
+}
+
+export function searchCompanies(
+  limit = 20,
+  query?: string
+): CompanyOption[] {
+  const db = getDb();
+
+  const deliverableCompaniesSubquery = db
+    .select({
+      companyId: contacts.companyId
+    })
+    .from(contacts)
+    .innerJoin(
+      emails,
+      and(eq(emails.contactId, contacts.id), eq(emails.status, "verified_ok"))
+    )
+    .groupBy(contacts.companyId)
+    .as("deliverable_companies");
+
+  const companyDomainsSubquery = db
+    .select({
+      companyId: domains.companyId,
+      domain: sql<string | null>`min(${domains.domain})`.as("domain")
+    })
+    .from(domains)
+    .groupBy(domains.companyId)
+    .as("company_domains");
+
+  const filters: SQL<unknown>[] = [];
+
+  if (query && query.trim().length > 0) {
+    const q = `%${query.trim()}%`;
+    filters.push(
+      or(like(companies.name, q), like(companyDomainsSubquery.domain, q))
+    );
+  }
+
+  let queryBuilder = db
+    .select({
+      id: companies.id,
+      name: companies.name,
+      domain: companyDomainsSubquery.domain
+    })
+    .from(companies)
+    .innerJoin(deliverableCompaniesSubquery, eq(deliverableCompaniesSubquery.companyId, companies.id))
+    .leftJoin(companyDomainsSubquery, eq(companyDomainsSubquery.companyId, companies.id));
+
+  if (filters.length > 0) {
+    queryBuilder = queryBuilder.where(and(...filters));
+  }
+
+  return queryBuilder.orderBy(asc(companies.name)).limit(limit).all();
+}
+
+export function getCompanyOption(companyId: string): CompanyOption | null {
+  const db = getDb();
+
+  const companyDomainsSubquery = db
+    .select({
+      companyId: domains.companyId,
+      domain: sql<string | null>`min(${domains.domain})`.as("domain")
+    })
+    .from(domains)
+    .groupBy(domains.companyId)
+    .as("company_domains");
+
+  return db
+    .select({
+      id: companies.id,
+      name: companies.name,
+      domain: companyDomainsSubquery.domain
+    })
+    .from(companies)
+    .leftJoin(companyDomainsSubquery, eq(companyDomainsSubquery.companyId, companies.id))
+    .where(eq(companies.id, companyId))
+    .get();
+}
+
+export function listIndustries(limit = 200): string[] {
+  const db = getDb();
+
+  const rows = db
+    .select({
+      industry: companies.industry
+    })
+    .from(companies)
+    .where(
+      and(
+        isNotNull(companies.industry),
+        sql`length(trim(${companies.industry})) > 0`
+      )
+    )
+    .groupBy(companies.industry)
+    .orderBy(asc(companies.industry))
+    .limit(limit)
+    .all();
+
+  return rows.map((r) => r.industry as string).filter(Boolean);
 }
 
 export function getCompanyDetail(companyId: string): CompanyDetail | null {

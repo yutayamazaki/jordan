@@ -6,6 +6,7 @@ from src.domains import Company
 from src.result import Result
 
 from ..base import Enricher, FieldEnricher
+from .common import WebsiteSnapshot, fetch_website_snapshot
 from .industry import IndustryFieldEnricher
 from .logo import LogoFieldEnricher
 
@@ -18,12 +19,12 @@ class CompanyEnricher(Enricher[Company]):
 
     def __init__(
         self,
-        client: httpx.Client,
+        client: httpx.AsyncClient,
         recompute_all: bool = False,
         min_confidence: float = 0.1,
     ) -> None:
         self.client = client
-        self.field_enrichers: tuple[FieldEnricher[Company, object], ...] = (
+        self.field_enrichers: tuple[FieldEnricher[Company, object, WebsiteSnapshot], ...] = (
             LogoFieldEnricher(client, recompute_all=recompute_all),
             IndustryFieldEnricher(
                 client,
@@ -32,10 +33,17 @@ class CompanyEnricher(Enricher[Company]):
             ),
         )
 
-    def enrich(self, item: Company) -> Result[Company, Exception]:
+    async def enrich(self, item: Company) -> Result[Company, Exception]:
         try:
+            snapshot: WebsiteSnapshot | None = None
+            if item.website_url:
+                snapshot_result = await fetch_website_snapshot(item.website_url, self.client)
+                if snapshot_result.is_err():
+                    return Result.err(snapshot_result.unwrap_err())
+                snapshot = snapshot_result.unwrap()
+
             for enricher in self.field_enrichers:
-                result = enricher.compute(item)
+                result = await enricher.compute(item, context=snapshot)
                 if result.is_err():
                     return Result.err(result.unwrap_err())
                 value = result.unwrap()

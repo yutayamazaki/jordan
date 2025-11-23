@@ -51,6 +51,7 @@ type CompaniesTableProps = {
   sortKey: CompanySortKey;
   sortOrder: SortOrder;
   domainQuery?: string;
+  industries?: string[];
   initialSelectedId?: string | null;
 };
 
@@ -59,6 +60,7 @@ export function CompaniesTable({
   sortKey,
   sortOrder,
   domainQuery,
+  industries,
   initialSelectedId,
 }: CompaniesTableProps) {
   const router = useRouter();
@@ -155,6 +157,10 @@ export function CompaniesTable({
     } else {
       params.delete("domain");
     }
+    params.delete("industries");
+    if (industries && industries.length > 0) {
+      industries.forEach((ind) => params.append("industries", ind));
+    }
     params.set("sort", nextKey);
     params.set("order", nextOrder);
     params.delete("page");
@@ -215,6 +221,16 @@ export function CompaniesTable({
             <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
               <button
                 type="button"
+                onClick={() => handleSort("industry")}
+                className="flex items-center gap-1"
+              >
+                <span>業種</span>
+                {renderSortIndicator("industry")}
+              </button>
+            </th>
+            <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
+              <button
+                type="button"
                 onClick={() => handleSort("websiteUrl")}
                 className="flex items-center gap-1"
               >
@@ -228,18 +244,8 @@ export function CompaniesTable({
                 onClick={() => handleSort("contactCount")}
                 className="flex items-center gap-1"
               >
-                <span>メールアドレス数</span>
+                <span>メール数</span>
                 {renderSortIndicator("contactCount")}
-              </button>
-            </th>
-            <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
-              <button
-                type="button"
-                onClick={() => handleSort("createdAt")}
-                className="flex items-center gap-1"
-              >
-                <span>作成日</span>
-                {renderSortIndicator("createdAt")}
               </button>
             </th>
             <th className="px-3 py-2 text-left text-sm font-semibold uppercase tracking-wide text-slate-500">
@@ -295,6 +301,9 @@ export function CompaniesTable({
                 {co.domain}
               </td>
               <td className="px-3 py-2 text-sm text-slate-700">
+                {co.industry ?? "-"}
+              </td>
+              <td className="px-3 py-2 text-sm text-slate-700">
                 {co.websiteUrl ? (
                   <a
                     href={co.websiteUrl}
@@ -312,9 +321,6 @@ export function CompaniesTable({
               </td>
               <td className="px-3 py-2 text-sm text-slate-700">
                 {co.contactCount}
-              </td>
-              <td className="px-3 py-2 text-xs text-slate-600">
-                {formatDate(co.createdAt)}
               </td>
               <td className="px-3 py-2 text-xs text-slate-600">
                 {formatDate(co.updatedAt)}
@@ -389,6 +395,10 @@ export function CompaniesTable({
                       ) : (
                         <p className="text-slate-400">-</p>
                       )}
+                      <div className="mt-3">
+                        <p className="font-semibold text-slate-600">業種</p>
+                        <p className="text-slate-800">{detail.industry ?? "-"}</p>
+                      </div>
                       {exportHref && (
                         <div className="mt-4">
                           <a

@@ -3,7 +3,6 @@ import {
   listAllContacts,
   type ContactSortField,
   type SortDirection,
-  type DeliverableEmailsFilter,
   type DepartmentCategoryFilter,
   type PositionCategoryFilter
 } from "@/lib/contacts";
@@ -13,7 +12,6 @@ export const dynamic = "force-dynamic";
 function parseSortParams(url: string): {
   sortField: ContactSortField;
   sortDirection: SortDirection;
-  emailsFilter: DeliverableEmailsFilter;
 } {
   const { searchParams } = new URL(url);
   const sortParam = searchParams.get("sort");
@@ -33,11 +31,7 @@ function parseSortParams(url: string): {
   const sortDirection: SortDirection =
     directionParam === "desc" ? "desc" : "asc";
 
-  const emailsParam = searchParams.get("emails");
-  const emailsFilter: DeliverableEmailsFilter =
-    emailsParam === "with" || emailsParam === "without" ? emailsParam : "with";
-
-  return { sortField, sortDirection, emailsFilter };
+  return { sortField, sortDirection };
 }
 
 function escapeCsvValue(value: string | number | boolean | null | undefined): string {
@@ -48,22 +42,21 @@ function escapeCsvValue(value: string | number | boolean | null | undefined): st
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const { sortField, sortDirection, emailsFilter } = parseSortParams(
+  const { sortField, sortDirection } = parseSortParams(
     request.url
   );
-  const domainQuery = url.searchParams.get("domain") ?? undefined;
   const departmentCategory: DepartmentCategoryFilter =
     url.searchParams.get("departmentCategory") ?? undefined;
   const positionCategory: PositionCategoryFilter =
     url.searchParams.get("positionCategory") ?? undefined;
+  const companyId = url.searchParams.get("companyId") ?? undefined;
 
   const contacts = listAllContacts(
     sortField,
     sortDirection,
-    domainQuery ?? undefined,
-    emailsFilter,
     departmentCategory,
-    positionCategory
+    positionCategory,
+    companyId ?? undefined
   );
 
   const header = ["name", "position", "department", "company", "domain", "email"];

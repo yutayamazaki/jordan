@@ -4,7 +4,6 @@ import {
   desc,
   eq,
   isNotNull,
-  isNull,
   like,
   or,
   sql,
@@ -77,7 +76,6 @@ export type ContactSortField =
 
 export type SortDirection = "asc" | "desc";
 
-export type DeliverableEmailsFilter = "with" | "without";
 export type DepartmentCategoryFilter = string | undefined;
 export type PositionCategoryFilter = string | undefined;
 
@@ -109,32 +107,15 @@ function buildDeliverableEmailsSubquery(db: DbClient) {
 }
 
 function buildContactFilters(
-  domainQuery: string | undefined,
-  deliverableFilter: DeliverableEmailsFilter,
   departmentCategory: DepartmentCategoryFilter,
-   positionCategory: PositionCategoryFilter,
-  deliverableEmailsSubquery: ReturnType<typeof buildDeliverableEmailsSubquery>,
-  companyDomainsSubquery: ReturnType<typeof buildCompanyDomainsSubquery>
+  positionCategory: PositionCategoryFilter,
+  companyId: string | undefined,
+  companyDomainsSubquery: ReturnType<typeof buildCompanyDomainsSubquery>,
+  deliverableEmailsSubquery: ReturnType<typeof buildDeliverableEmailsSubquery>
 ): SQL<unknown>[] {
   const filters: SQL<unknown>[] = [];
 
-  if (domainQuery && domainQuery.trim().length > 0) {
-    const q = `%${domainQuery.trim()}%`;
-    filters.push(
-      or(
-        like(companyDomainsSubquery.domain, q),
-        like(companies.name, q),
-        like(contacts.position, q),
-        like(contacts.department, q)
-      )
-    );
-  }
-
-  if (deliverableFilter === "with") {
-    filters.push(isNotNull(deliverableEmailsSubquery.deliverableEmails));
-  } else if (deliverableFilter === "without") {
-    filters.push(isNull(deliverableEmailsSubquery.deliverableEmails));
-  }
+  filters.push(isNotNull(deliverableEmailsSubquery.deliverableEmails));
 
   if (departmentCategory && departmentCategory.trim().length > 0) {
     filters.push(eq(contacts.departmentCategory, departmentCategory.trim()));
@@ -142,6 +123,10 @@ function buildContactFilters(
 
   if (positionCategory && positionCategory.trim().length > 0) {
     filters.push(eq(contacts.positionCategory, positionCategory.trim()));
+  }
+
+  if (companyId && companyId.trim().length > 0) {
+    filters.push(eq(contacts.companyId, companyId.trim()));
   }
 
   return filters;
@@ -180,21 +165,19 @@ export function listContacts(
   offset = 0,
   sortField: ContactSortField = "companyDomain",
   sortDirection: SortDirection = "asc",
-  domainQuery?: string,
-  deliverableFilter: DeliverableEmailsFilter = "with",
   departmentCategory?: DepartmentCategoryFilter,
-  positionCategory?: PositionCategoryFilter
+  positionCategory?: PositionCategoryFilter,
+  companyId?: string
 ): ContactListItem[] {
   const db = getDb();
   const companyDomainsSubquery = buildCompanyDomainsSubquery(db);
   const deliverableEmailsSubquery = buildDeliverableEmailsSubquery(db);
   const filters = buildContactFilters(
-    domainQuery,
-    deliverableFilter,
     departmentCategory,
     positionCategory,
-    deliverableEmailsSubquery,
-    companyDomainsSubquery
+    companyId,
+    companyDomainsSubquery,
+    deliverableEmailsSubquery
   );
 
   const orderByColumn = resolveSortColumn(sortField, companyDomainsSubquery);
@@ -239,21 +222,19 @@ export function listContacts(
 export function listAllContacts(
   sortField: ContactSortField = "companyDomain",
   sortDirection: SortDirection = "asc",
-  domainQuery?: string,
-  deliverableFilter: DeliverableEmailsFilter = "with",
   departmentCategory?: DepartmentCategoryFilter,
-  positionCategory?: PositionCategoryFilter
+  positionCategory?: PositionCategoryFilter,
+  companyId?: string
 ): ContactListItem[] {
   const db = getDb();
   const companyDomainsSubquery = buildCompanyDomainsSubquery(db);
   const deliverableEmailsSubquery = buildDeliverableEmailsSubquery(db);
   const filters = buildContactFilters(
-    domainQuery,
-    deliverableFilter,
     departmentCategory,
     positionCategory,
-    deliverableEmailsSubquery,
-    companyDomainsSubquery
+    companyId,
+    companyDomainsSubquery,
+    deliverableEmailsSubquery
   );
 
   const orderByColumn = resolveSortColumn(sortField, companyDomainsSubquery);
@@ -296,21 +277,19 @@ export function listAllContacts(
 }
 
 export function countContacts(
-  domainQuery?: string,
-  deliverableFilter: DeliverableEmailsFilter = "with",
   departmentCategory?: DepartmentCategoryFilter,
-  positionCategory?: PositionCategoryFilter
+  positionCategory?: PositionCategoryFilter,
+  companyId?: string
 ): number {
   const db = getDb();
   const companyDomainsSubquery = buildCompanyDomainsSubquery(db);
   const deliverableEmailsSubquery = buildDeliverableEmailsSubquery(db);
   const filters = buildContactFilters(
-    domainQuery,
-    deliverableFilter,
     departmentCategory,
     positionCategory,
-    deliverableEmailsSubquery,
-    companyDomainsSubquery
+    companyId,
+    companyDomainsSubquery,
+    deliverableEmailsSubquery
   );
 
   let queryBuilder = db

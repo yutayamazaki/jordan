@@ -4,9 +4,8 @@ import argparse
 import sqlite3
 import time
 from pathlib import Path
-from typing import Dict, List
 
-import pydantic
+from pydantic import BaseModel, TypeAdapter
 from tqdm import tqdm
 
 from src.domains import Domain
@@ -14,11 +13,12 @@ from src.enrichers.domain import DomainEnricher, EmailEntry
 from src.result import Result
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "jordan.sqlite"
+DEFAULT_BATCH_SIZE = 100
 
 
 def load_emails_by_domain(
     conn: sqlite3.Connection,
-) -> Result[Dict[str, List[EmailEntry]], Exception]:
+) -> Result[dict[str, list[EmailEntry]], Exception]:
     """emails と contacts を突き合わせ、verified_ok のみをドメインごとに集計する。"""
     try:
         cursor = conn.execute(
@@ -37,7 +37,7 @@ def load_emails_by_domain(
     except Exception as exc:  # pragma: no cover - sqlite3 error is enough
         return Result.err(exc)
 
-    mapping: Dict[str, List[EmailEntry]] = {}
+    mapping: dict[str, list[EmailEntry]] = {}
     for row in cursor:
         email = row["email"]
         try:
@@ -56,7 +56,7 @@ def load_emails_by_domain(
     return Result.ok(mapping)
 
 
-def load_domains(conn: sqlite3.Connection) -> Result[List[Domain], Exception]:
+def load_domains(conn: sqlite3.Connection) -> Result[list[Domain], Exception]:
     """domains テーブルを全件ロードする。"""
     try:
         cursor = conn.execute(
@@ -103,6 +103,26 @@ def update_pattern(
         return Result.err(exc)
 
 
+def update_patterns_batch(
+    conn: sqlite3.Connection, batch: list[tuple[str, str]]
+) -> Result[None, Exception]:
+    """Domain.pattern をまとめて更新する。batch: [(pattern, domain_id), ...]"""
+    if not batch:
+        return Result.ok(None)
+
+    now_ts = int(time.time())
+    payload = [(pattern, now_ts, domain_id) for pattern, domain_id in batch]
+    try:
+        conn.executemany(
+            "UPDATE domains SET pattern = ?, updated_at = ? WHERE id = ?",
+            payload,
+        )
+        conn.commit()
+        return Result.ok(None)
+    except Exception as exc:  # pragma: no cover - sqlite3 error is enough
+        return Result.err(exc)
+
+
 def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
     """既存のメールアドレスからパターンを推定し、domains.pattern を埋める。"""
     try:
@@ -131,29 +151,51 @@ def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
         enricher = DomainEnricher(emails_by_domain)
 
         updated = 0
+        pending_updates: list[tuple[str, str]] = []
+        errors: list[tuple[str, str]] = []
         progress = tqdm(targets, desc="updating domain patterns")
         for domain in progress:
             enriched_result = enricher.enrich(domain)
             if enriched_result.is_err():
-                return Result.err(enriched_result.unwrap_err())
+                errors.append((domain.domain or "", str(enriched_result.unwrap_err())))
+                continue
 
             enriched = enriched_result.unwrap()
             if not enriched.pattern:
                 continue
 
-            update_result = update_pattern(conn, enriched.id, enriched.pattern)
-            if update_result.is_err():
-                return Result.err(update_result.unwrap_err())
+            pending_updates.append((enriched.pattern, enriched.id))
+            if len(pending_updates) >= DEFAULT_BATCH_SIZE:
+                update_result = update_patterns_batch(conn, pending_updates)
+                if update_result.is_err():
+                    errors.append(
+                        (f"batch({domain.domain or ''}...)", str(update_result.unwrap_err()))
+                    )
+                else:
+                    updated += len(pending_updates)
+                    progress.set_postfix(pattern=enriched.pattern, updated=updated, refresh=False)
+                pending_updates.clear()
 
-            updated += 1
-            progress.set_postfix(pattern=enriched.pattern, updated=updated, refresh=False)
+        if pending_updates:
+            update_result = update_patterns_batch(conn, pending_updates)
+            if update_result.is_err():
+                errors.append(("batch(final)", str(update_result.unwrap_err())))
+            else:
+                updated += len(pending_updates)
+                progress.set_postfix(updated=updated, refresh=False)
+
+        if errors:
+            print(f"Processed with {len(errors)} errors:")
+            for domain_value, message in errors:
+                prefix = f"[{domain_value}]" if domain_value else "[unknown]"
+                print(f"{prefix} {message}")
 
         return Result.ok(updated)
     finally:
         conn.close()
 
 
-class Args(pydantic.BaseModel):
+class Args(BaseModel):
     db: Path = DEFAULT_DB_PATH
     recompute_all: bool = False
 
@@ -174,7 +216,7 @@ def _parse_args() -> Args:
         help="既存の pattern が入っていても再計算して上書きします（デフォルトは未設定のみ更新）。",
     )
     parsed_args = parser.parse_args()
-    return Args.model_validate(vars(parsed_args))
+    return TypeAdapter(Args).validate_python(vars(parsed_args))
 
 
 def main() -> None:

@@ -11,6 +11,7 @@ from src.domains import Company
 from src.result import Result
 
 from ..base import FieldEnricher
+from .common import WebsiteSnapshot, _normalize_website_url
 
 
 class IndustryRule(BaseModel):
@@ -411,14 +412,14 @@ RULES: tuple[IndustryRule, ...] = (
 )
 
 
-class IndustryFieldEnricher(FieldEnricher[Company, str]):
+class IndustryFieldEnricher(FieldEnricher[Company, str, WebsiteSnapshot]):
     """Webサイトのテキストから業種を分類し、industry に設定する。"""
 
     field_name = "industry"
 
     def __init__(
         self,
-        client: httpx.Client,
+        client: httpx.AsyncClient,
         recompute_all: bool = False,
         min_confidence: float = 0.1,
     ) -> None:
@@ -426,11 +427,15 @@ class IndustryFieldEnricher(FieldEnricher[Company, str]):
         self.recompute_all = recompute_all
         self.min_confidence = min_confidence
 
-    def compute(self, item: Company) -> Result[Optional[str], Exception]:
+    async def compute(
+        self, item: Company, context: WebsiteSnapshot | None = None
+    ) -> Result[Optional[str], Exception]:
         if not self.recompute_all and item.industry and str(item.industry).strip():
             return Result.ok(None)
 
-        website_text_result = _fetch_website_text(item.website_url, self.client)
+        website_text_result = await _fetch_website_text(
+            item.website_url, self.client, snapshot=context
+        )
         if website_text_result.is_err():
             return Result.err(website_text_result.unwrap_err())
 
@@ -464,26 +469,23 @@ class IndustryFieldEnricher(FieldEnricher[Company, str]):
         return Result.ok(best_rule.label)
 
 
-def _normalize_url(raw_url: str | None) -> Optional[str]:
-    """プロトコルを補ったシンプルな URL を返す。"""
-    trimmed = (raw_url or "").strip()
-    if not trimmed:
-        return None
-    if not trimmed.startswith(("http://", "https://")):
-        trimmed = f"https://{trimmed}"
-    return trimmed
-
-
-def _fetch_website_text(
-    website_url: str | None, client: httpx.Client
+async def _fetch_website_text(
+    website_url: str | None,
+    client: httpx.AsyncClient,
+    snapshot: WebsiteSnapshot | None = None,
 ) -> Result[Optional[str], Exception]:
     """指定サイトの HTML を取得し、テキストのみを抽出する。"""
-    normalized = _normalize_url(website_url)
-    if not normalized:
-        return Result.err(ValueError("website_url is empty"))
+    if snapshot and snapshot.text is not None:
+        return Result.ok(snapshot.text)
+
+    normalized_result = _normalize_website_url(website_url or "")
+    if normalized_result.is_err():
+        return normalized_result  # type: ignore[return-value]
+
+    normalized = normalized_result.unwrap()
 
     try:
-        resp = client.get(normalized, follow_redirects=True)
+        resp = await client.get(normalized, follow_redirects=True)
     except httpx.HTTPError as exc:
         return Result.err(exc)
 

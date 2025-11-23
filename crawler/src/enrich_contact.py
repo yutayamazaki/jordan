@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import Iterable
 
-import pydantic
+from pydantic import BaseModel, TypeAdapter
 from tqdm import tqdm
 
 from src.domains import Contact
@@ -12,6 +12,7 @@ from src.enrichers.contact import ContactEnricher
 from src.result import Result
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "jordan.sqlite"
+DEFAULT_BATCH_SIZE = 100
 
 
 def ensure_department_category_column(conn: sqlite3.Connection) -> Result[None, Exception]:
@@ -131,15 +132,21 @@ def iter_contacts(conn: sqlite3.Connection, only_missing: bool = True) -> Iterab
         yield Contact.model_validate(item)
 
 
-def update_categories(
+def update_categories_batch(
     conn: sqlite3.Connection,
-    contact_id: str,
-    department_category: str | None,
-    position_category: str | None,
+    batch: list[tuple[str | None, str | None, str]],
 ) -> Result[None, Exception]:
-    """department_category / position_category を 1 件ずつ更新する。"""
+    """
+    department_category / position_category をまとめて更新する。
+    batch: [(department_category, position_category, contact_id), ...]
+    """
+    if not batch:
+        return Result.ok(None)
+
+    now_ts = int(time.time())
+    payload = [(dept, pos, now_ts, contact_id) for dept, pos, contact_id in batch]
     try:
-        conn.execute(
+        conn.executemany(
             """
             UPDATE contacts
             SET
@@ -148,7 +155,7 @@ def update_categories(
               updated_at = ?
             WHERE id = ?
             """,
-            (department_category, position_category, int(time.time()), contact_id),
+            payload,
         )
         conn.commit()
         return Result.ok(None)
@@ -178,6 +185,8 @@ def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
         total = count_targets(conn, only_missing=only_missing)
         enricher = ContactEnricher()
         updated = 0
+        errors: list[tuple[str, str]] = []
+        pending_updates: list[tuple[str | None, str | None, str]] = []
 
         progress = tqdm(
             iter_contacts(conn, only_missing=only_missing),
@@ -190,7 +199,8 @@ def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
 
             enriched_result = enricher.enrich(contact)
             if enriched_result.is_err():
-                return Result.err(enriched_result.unwrap_err())
+                errors.append((contact.full_name or "", str(enriched_result.unwrap_err())))
+                continue
 
             enriched = enriched_result.unwrap()
             if not enriched.department_category and not enriched.position_category:
@@ -208,24 +218,41 @@ def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
             if dept_value is None and pos_value is None:
                 continue
 
-            update_result = update_categories(conn, enriched.id, dept_value, pos_value)
-            if update_result.is_err():
-                return Result.err(update_result.unwrap_err())
+            pending_updates.append((dept_value, pos_value, enriched.id))
+            if len(pending_updates) >= DEFAULT_BATCH_SIZE:
+                update_result = update_categories_batch(conn, pending_updates)
+                if update_result.is_err():
+                    errors.append((contact.full_name or "", str(update_result.unwrap_err())))
+                else:
+                    updated += len(pending_updates)
+                    progress.set_postfix(
+                        dept=enriched.department_category,
+                        pos=enriched.position_category,
+                        updated=updated,
+                        refresh=False,
+                    )
+                pending_updates.clear()
 
-            updated += 1
-            progress.set_postfix(
-                dept=enriched.department_category,
-                pos=enriched.position_category,
-                updated=updated,
-                refresh=False,
-            )
+        if pending_updates:
+            update_result = update_categories_batch(conn, pending_updates)
+            if update_result.is_err():
+                errors.append(("[batch]", str(update_result.unwrap_err())))
+            else:
+                updated += len(pending_updates)
+                progress.set_postfix(updated=updated, refresh=False)
+
+        if errors:
+            print(f"Processed with {len(errors)} errors:")
+            for name, message in errors:
+                prefix = f"[{name}]" if name else "[unknown]"
+                print(f"{prefix} {message}")
 
         return Result.ok(updated)
     finally:
         conn.close()
 
 
-class Args(pydantic.BaseModel):
+class Args(BaseModel):
     db: Path = DEFAULT_DB_PATH
     recompute_all: bool = False
 
@@ -246,7 +273,7 @@ def _parse_args() -> Args:
         help="既存のカテゴリが入っていても再計算して上書きします（デフォルトは未設定のみ更新）。",
     )
     parsed_args = parser.parse_args()
-    return Args.model_validate(vars(parsed_args))
+    return TypeAdapter(Args).validate_python(vars(parsed_args))
 
 
 def main() -> None:

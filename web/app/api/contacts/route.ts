@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   listContacts,
-  type DeliverableEmailsFilter,
-  type DepartmentCategoryFilter
+  type DepartmentCategoryFilter,
+  type PositionCategoryFilter
 } from "@/lib/contacts";
 
 export const dynamic = "force-dynamic";
@@ -10,10 +10,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limitParam = searchParams.get("limit");
-  const emailsParam = searchParams.get("emails");
-  const domainQuery = searchParams.get("domain") ?? undefined;
   const departmentCategory: DepartmentCategoryFilter =
     searchParams.get("departmentCategory") ?? undefined;
+  const positionCategory: PositionCategoryFilter =
+    searchParams.get("positionCategory") ?? undefined;
+  const companyId = searchParams.get("companyId") ?? undefined;
 
   let limit = 100;
   if (limitParam) {
@@ -23,17 +24,14 @@ export async function GET(request: Request) {
     }
   }
 
-  const emailsFilter: DeliverableEmailsFilter =
-    emailsParam === "with" || emailsParam === "without" ? emailsParam : "with";
-
   const contacts = listContacts(
     limit,
     0,
     "companyDomain",
     "asc",
-    domainQuery ?? undefined,
-    emailsFilter,
-    departmentCategory
+    departmentCategory,
+    positionCategory,
+    companyId ?? undefined
   );
 
   return NextResponse.json({ contacts });
