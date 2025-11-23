@@ -6,7 +6,7 @@ import unicodedata
 from src.domains import Contact
 from src.result import Result
 
-from .base import Enricher
+from ..base import Enricher
 
 DEPARTMENT_CATEGORY_CHOICES = [
     "経営",

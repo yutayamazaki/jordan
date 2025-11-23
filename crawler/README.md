@@ -4,20 +4,20 @@
 
 ## 主なスクリプト
 
-- `enrich_contact.py`  
+- `src/enrich_contact.py`  
   `contacts.department` / `contacts.position` の文字列を正規化し、部署カテゴリ（`department_category`）と役職カテゴリ（`position_category`）を推定して更新します。カラムが無い場合は `ALTER TABLE` で追加し、`tqdm` で進捗を出します。デフォルトでは未設定のレコードだけを更新し、`--recompute-all` を付けると既存カテゴリも再計算して上書きします。
-- `enrich_company.py`  
-  `companies.website_url` から favicon（ロゴ代替）を探索し、`logo_url` を埋めます。`httpx` で疎通確認しつつ、HTML の `<link rel="icon">` を優先的に解析し、見つからなければ `/favicon.ico` など代表パスを総当たりします。
-- `enrich_domain.py`  
+- `src/enrich_company.py`  
+  `companies.website_url` から favicon（ロゴ代替）を探索し `logo_url` を埋めつつ、企業名/説明/既存 industry から簡易ルールで業種ラベルを判定して `industry` を補完します。
+- `src/enrich_domain.py`  
   既存メール（`emails` と `contacts` を join）からローカル部のパターンを多数決で推定し、`domains.pattern` を更新します。`first.last` や `flast` などの組み合わせを候補として比較します。
 
 ## Enricher クラス
 
-`enrichers/` に各種ロジックがまとまっています。
+`src/enrichers/` に各種ロジックがまとまっています（テストは `src/tests/` 配下）。
 
 - `base.py`: `Enricher` プロトコル（`enrich(item) -> Result`）。
-- `contact.py`: 部署名の正規化・カテゴリ判定（テストは `tests/test_contact_enricher.py`）。
-- `company.py`: website から favicon を引くロジック。
+- `contact/`: 正規化と部署/役職カテゴリ分類（`contact/enricher.py`、テストは `src/tests/test_contact_enricher.py`）。
+- `company/`: website から favicon を引きつつ業種を補完するロジック（`company/enricher.py` orchestrates `company/logo.py` と `company/industry.py`）。
 - `domain.py`: メールアドレスのローカル部からパターンを推定するヘルパー。
 
 ## 実行方法
@@ -25,34 +25,30 @@
 ```bash
 # 例: 部署カテゴリの埋め直し
 cd crawler
-python enrich_contact.py --db ../data/jordan.sqlite
+uv run python -m src.enrich_contact --db ../data/jordan.sqlite
 # 既存カテゴリも含めて再計算する場合
-python enrich_contact.py --db ../data/jordan.sqlite --recompute-all
+uv run python -m src.enrich_contact --db ../data/jordan.sqlite --recompute-all
 
-# 例: favicon を logo_url に追加
-python enrich_company.py --db ../data/jordan.sqlite
+# 例: favicon と industry を追加
+uv run python -m src.enrich_company --db ../data/jordan.sqlite
+# 既存 logo/industry も含めて再計算
+uv run python -m src.enrich_company --db ../data/jordan.sqlite --recompute-all
 
 # 例: domains.pattern の推定
-python enrich_domain.py --db ../data/jordan.sqlite
+uv run python -m src.enrich_domain --db ../data/jordan.sqlite
+# 既存 pattern も含めて再計算
+uv run python -m src.enrich_domain --db ../data/jordan.sqlite --recompute-all
 ```
 
 ## Tests
 
-Run pytest from the project root (uses the dependencies defined in `crawler/pyproject.toml`):
-
-```bash
-cd crawler
-pip install -U pytest  # if not already installed
-pytest
-```
-
-If you use [uv](https://github.com/astral-sh/uv):
+Run pytest with [uv](https://github.com/astral-sh/uv) (dependencies from `crawler/pyproject.toml`):
 
 ```bash
 cd crawler
 uv sync --extra dev
-uv run pytest
-uv run coverage run -m pytest && uv run coverage report
+uv run pytest src/tests
+uv run coverage run -m pytest src/tests && uv run coverage report
 ```
 
 Lint with ruff (uv-managed environment):

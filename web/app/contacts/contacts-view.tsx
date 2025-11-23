@@ -227,14 +227,9 @@ export function ContactsView({
                             氏名
                           </p>
                           <div className="flex flex-wrap items-baseline gap-2">
-                            <p className="text-lg font-semibold text-slate-900">
+                            <p className="text-lg text-slate-900">
                               {detail.contact.name}
                             </p>
-                            {detail.contact.position && (
-                              <span className="text-sm text-slate-600">
-                                {detail.contact.position}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </div>

@@ -1,9 +1,6 @@
 import pytest
 
-from enrichers.company import (
-    _build_favicon_candidates,
-    _normalize_website_url,
-)
+from src.enrichers.company.logo import _build_favicon_candidates, _normalize_website_url
 
 
 @pytest.mark.parametrize(

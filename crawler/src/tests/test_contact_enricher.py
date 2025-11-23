@@ -1,6 +1,6 @@
 import pytest
 
-from enrichers.contact import (
+from src.enrichers.contact import (
     _normalize,  # type: ignore[attr-defined]
     classify_department_category,
     classify_position_category,

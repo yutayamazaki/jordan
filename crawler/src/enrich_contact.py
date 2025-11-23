@@ -6,11 +6,11 @@ from typing import Iterable
 
 from tqdm import tqdm
 
-from enrichers.contact import ContactEnricher
 from src.domains import Contact
+from src.enrichers.contact import ContactEnricher
 from src.result import Result
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "jordan.sqlite"
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "jordan.sqlite"
 
 
 def ensure_department_category_column(conn: sqlite3.Connection) -> Result[None, Exception]:

@@ -1,12 +1,12 @@
 import sqlite3
 from pathlib import Path
 
-from enrich_contact import (
+from src.enrich_contact import (
     ensure_department_category_column,
     iter_contacts,
     run,
 )
-from enrichers.contact import classify_department_category, classify_position_category
+from src.enrichers.contact import classify_department_category, classify_position_category
 
 
 def _make_db(db_path: Path) -> sqlite3.Connection:

@@ -20,7 +20,7 @@ dev = [
 
 [tool.coverage.run]
 branch = true
-source = ["enrichers", "enrich_contact.py"]
+source = ["src"]
 
 [tool.coverage.report]
 show_missing = true

@@ -4,7 +4,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from enrich_contact import run
+from src.enrich_contact import run
 
 
 def _prepare_db(tmp_path: Path) -> Path:

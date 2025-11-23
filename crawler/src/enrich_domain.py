@@ -8,11 +8,11 @@ from typing import Dict, List
 
 from tqdm import tqdm
 
-from enrichers.domain import DomainEnricher, EmailEntry
 from src.domains import Domain
+from src.enrichers.domain import DomainEnricher, EmailEntry
 from src.result import Result
 
-DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "jordan.sqlite"
+DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "jordan.sqlite"
 
 
 def load_emails_by_domain(
@@ -102,7 +102,7 @@ def update_pattern(
         return Result.err(exc)
 
 
-def run(db_path: Path) -> Result[int, Exception]:
+def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
     """既存のメールアドレスからパターンを推定し、domains.pattern を埋める。"""
     try:
         conn = sqlite3.connect(db_path)
@@ -121,7 +121,12 @@ def run(db_path: Path) -> Result[int, Exception]:
             return Result.err(domains_result.unwrap_err())
         domains = domains_result.unwrap()
 
-        targets = [domain for domain in domains if domain.domain.lower() in emails_by_domain]
+        targets = [
+            domain
+            for domain in domains
+            if domain.domain.lower() in emails_by_domain
+            and (recompute_all or not (domain.pattern and str(domain.pattern).strip()))
+        ]
         enricher = DomainEnricher(emails_by_domain)
 
         updated = 0
@@ -157,12 +162,17 @@ def _parse_args() -> argparse.Namespace:
         default=DEFAULT_DB_PATH,
         help=f"Path to SQLite DB (default: {DEFAULT_DB_PATH})",
     )
+    parser.add_argument(
+        "--recompute-all",
+        action="store_true",
+        help="既存の pattern が入っていても再計算して上書きします（デフォルトは未設定のみ更新）。",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
-    result = run(args.db)
+    result = run(args.db, recompute_all=args.recompute_all)
     if result.is_err():
         error = result.unwrap_err()
         print(f"Error: {error}")

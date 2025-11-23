@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from src.domains import Company
 from src.result import Result
 
-from .base import Enricher
+from ..base import FieldEnricher
 
 
 def _normalize_website_url(raw_url: str) -> Result[str, Exception]:
@@ -63,41 +63,12 @@ def _is_reachable(
     return _request("HEAD") or _request("GET")
 
 
-def _choose_favicon_url(
-    website_url: str,
-    client: httpx.Client,
-) -> Result[Optional[str], Exception]:
-    """website_url から favicon URL を推定し、HTML 解析→既知パスの順で探索する。"""
-    normalized_result = _normalize_website_url(website_url)
-    if normalized_result.is_err():
-        return normalized_result
-
-    normalized = normalized_result.unwrap()
-
-    # 1) HTML から <link rel=icon> 等を解析
-    html_icon_result = _fetch_favicon_from_html(normalized, client)
-    if html_icon_result.is_err():
-        return html_icon_result
-
-    html_icon = html_icon_result.unwrap()
-    if html_icon and _is_reachable(html_icon, client):
-        return Result.ok(html_icon)
-
-    # 2) 代表的なパスを総当たり
-    candidates = _build_favicon_candidates(normalized)
-    for candidate in candidates:
-        if _is_reachable(candidate, client):
-            return Result.ok(candidate)
-
-    return Result.ok(None)
-
-
 def _fetch_favicon_from_html(
     website_url: str,
     client: httpx.Client,
 ) -> Result[Optional[str], Exception]:
     """
-    HTML を取得して <link rel="icon"> 等を解決する。
+    HTML を取得して <link rel=\"icon\"> 等を解決する。
     失敗時は None を返しフォールバックに任せる。
     """
     try:
@@ -127,26 +98,49 @@ def _fetch_favicon_from_html(
     return Result.ok(None)
 
 
-class CompanyEnricher(Enricher[Company]):
-    """Company の website から favicon を探し、logo_url を埋める。"""
+def _choose_favicon_url(
+    website_url: str,
+    client: httpx.Client,
+) -> Result[Optional[str], Exception]:
+    """website_url から favicon URL を推定し、HTML 解析→既知パスの順で探索する。"""
+    normalized_result = _normalize_website_url(website_url)
+    if normalized_result.is_err():
+        return normalized_result
 
-    def __init__(self, client: httpx.Client) -> None:
+    normalized = normalized_result.unwrap()
+
+    # 1) HTML から <link rel=icon> 等を解析
+    html_icon_result = _fetch_favicon_from_html(normalized, client)
+    if html_icon_result.is_err():
+        return html_icon_result
+
+    html_icon = html_icon_result.unwrap()
+    if html_icon and _is_reachable(html_icon, client):
+        return Result.ok(html_icon)
+
+    # 2) 代表的なパスを総当たり
+    candidates = _build_favicon_candidates(normalized)
+    for candidate in candidates:
+        if _is_reachable(candidate, client):
+            return Result.ok(candidate)
+
+    return Result.ok(None)
+
+
+class LogoFieldEnricher(FieldEnricher[Company, str]):
+    """favicon を取得して logo_url に設定する。"""
+
+    field_name = "logo_url"
+
+    def __init__(self, client: httpx.Client, recompute_all: bool = False) -> None:
         self.client = client
+        self.recompute_all = recompute_all
 
-    def enrich(self, company: Company) -> Result[Company, Exception]:
-        logo_result = self._fetch_logo_url(company)
-        if logo_result.is_err():
-            return Result.err(logo_result.unwrap_err())
-
-        logo_url = logo_result.unwrap()
-        if logo_url:
-            company.logo_url = logo_url
-
-        return Result.ok(company)
-
-    def _fetch_logo_url(self, company: Company) -> Result[Optional[str], Exception]:
-        url = company.website_url
-        if not url:
+    def compute(self, item: Company) -> Result[Optional[str], Exception]:
+        if not self.recompute_all and item.logo_url:
             return Result.ok(None)
 
-        return _choose_favicon_url(url, self.client)
+        if not item.website_url:
+            return Result.ok(None)
+
+        return _choose_favicon_url(item.website_url, self.client)
