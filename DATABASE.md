@@ -1,110 +1,125 @@
 # データベース定義（SQLite, `data/jordan.sqlite`）
 
+タイムスタンプは `INTEGER`（Unix time）で保存されます。`INTEGER` のブール値は 0/1 です。
+
 ## companies
 
-| カラム名      | 型    | 制約                     | 説明                          |
-|--------------|-------|--------------------------|-------------------------------|
-| id           | TEXT  | PRIMARY KEY              | 企業 ID（UUID）               |
-| name         | TEXT  | NOT NULL                 | 企業名                        |
-| domain       | TEXT  | NOT NULL                 | 企業ドメイン                  |
-| website_url  | TEXT  |                          | Web サイト URL                |
-| favicon_url  | TEXT  |                          | ファビコン URL                |
+| カラム名           | 型      | 制約            | 説明                                |
+|--------------------|---------|-----------------|-------------------------------------|
+| id                 | TEXT    | PRIMARY KEY     | 企業 ID（UUID）                    |
+| name               | TEXT    | NOT NULL        | 企業名                               |
+| website_url        | TEXT    |                 | 代表サイト URL                       |
+| description        | TEXT    |                 | 企業説明                             |
+| industry           | TEXT    |                 | 業種                                 |
+| country            | TEXT    |                 | 国                                   |
+| city               | TEXT    |                 | 市区町村                             |
+| employee_range     | TEXT    |                 | 従業員規模（例: "1-10", "11-50"）    |
+| primary_domain_id  | INTEGER |                 | プライマリドメインの ID（任意）      |
+| created_at         | INTEGER | NOT NULL        | 作成日時                             |
+| updated_at         | INTEGER | NOT NULL        | 更新日時                             |
+
+索引: `idx_companies_name (name)`
+
+## domains
+
+| カラム名       | 型      | 制約                                 | 説明                                |
+|----------------|---------|--------------------------------------|-------------------------------------|
+| id             | TEXT    | PRIMARY KEY                          | ドメイン ID（UUID）                 |
+| company_id     | TEXT    | NOT NULL, FOREIGN KEY → companies(id) ON DELETE CASCADE | 紐付く企業 |
+| domain         | TEXT    | NOT NULL, UNIQUE                     | ドメイン（例: example.com）         |
+| disposable     | INTEGER | NOT NULL DEFAULT 0                   | 使い捨てドメインか                   |
+| webmail        | INTEGER | NOT NULL DEFAULT 0                   | Web メールドメインか                |
+| accept_all     | INTEGER | NOT NULL DEFAULT 0                   | Accept-All ドメインか               |
+| pattern        | TEXT    |                                      | 推定/既知のメールパターン            |
+| first_seen_at  | INTEGER |                                      | 初回検出日時                         |
+| last_seen_at   | INTEGER |                                      | 最終検出日時                         |
+| created_at     | INTEGER | NOT NULL                             | 作成日時                             |
+| updated_at     | INTEGER | NOT NULL                             | 更新日時                             |
+
+索引: `idx_domains_domain (domain, UNIQUE)`, `idx_domains_company_id (company_id)`
 
 ## contacts
 
-| カラム名           | 型   | 制約                                | 説明                           |
-|--------------------|------|-------------------------------------|--------------------------------|
-| id                 | TEXT | PRIMARY KEY                         | 担当者 ID（UUID）             |
-| company_id         | TEXT | NOT NULL, FOREIGN KEY → companies   | 企業 ID                        |
-| name               | TEXT | NOT NULL                            | 氏名（フルネーム）            |
-| position           | TEXT | NOT NULL                            | 役職                           |
-| department         | TEXT | NOT NULL                            | 部署名                         |
-| department_category| TEXT | NOT NULL                            | 部署カテゴリ                   |
-| first_name         | TEXT | NOT NULL                            | 名                             |
-| last_name          | TEXT | NOT NULL                            | 姓                             |
+| カラム名      | 型      | 制約                                 | 説明                                   |
+|---------------|---------|--------------------------------------|----------------------------------------|
+| id            | TEXT    | PRIMARY KEY                          | 担当者 ID（UUID）                     |
+| company_id    | TEXT    | NOT NULL, FOREIGN KEY → companies(id) ON DELETE CASCADE | 紐付く企業 |
+| full_name     | TEXT    | NOT NULL                             | 氏名（フルネーム）                     |
+| first_name    | TEXT    |                                      | 名                                      |
+| last_name     | TEXT    |                                      | 姓                                      |
+| position      | TEXT    |                                      | 役職                                    |
+| department    | TEXT    |                                      | 部署                                    |
+| seniority     | TEXT    |                                      | シニアリティ（例: C-level, Manager）    |
+| country       | TEXT    |                                      | 国                                      |
+| city          | TEXT    |                                      | 市区町村                                |
+| linkedin_url  | TEXT    |                                      | LinkedIn URL                            |
+| twitter_url   | TEXT    |                                      | Twitter/X URL                           |
+| phone_number  | TEXT    |                                      | 電話番号                                |
+| source_label  | TEXT    |                                      | 取得元のラベル                          |
+| source_url    | TEXT    |                                      | その人を見つけた URL                    |
+| first_seen_at | INTEGER |                                      | 初回検出日時                            |
+| last_seen_at  | INTEGER |                                      | 最終検出日時                            |
+| created_at    | INTEGER | NOT NULL                             | 作成日時                                |
+| updated_at    | INTEGER | NOT NULL                             | 更新日時                                |
 
-## email_candidates
+索引: `idx_contacts_company_id (company_id)`, `idx_contacts_position_department (position, department)`, `idx_contacts_created_at (created_at)`
 
-| カラム名           | 型    | 制約                              | 説明                                   |
-|--------------------|-------|-----------------------------------|----------------------------------------|
-| id                 | TEXT  | PRIMARY KEY                       | メール候補 ID（UUID）                 |
-| contact_id         | TEXT  | NOT NULL, FOREIGN KEY → contacts  | 担当者 ID                              |
-| email              | TEXT  | NOT NULL                          | メールアドレス候補                     |
-| is_primary         | INTEGER | NOT NULL                        | プライマリ候補か（0/1）                |
-| confidence         | REAL  | NOT NULL                          | 信頼度スコア                           |
-| type               | TEXT  | NOT NULL                          | メール種別                             |
-| pattern            | TEXT  |                                   | 使用したパターン文字列                 |
-| is_deliverable     | INTEGER |                                   | 到達可能フラグ（0/1, null 可）        |
-| has_mx_records     | INTEGER |                                   | MX レコード有無（0/1, null 可）       |
-| verification_reason| TEXT  |                                   | 検証結果の補足                        |
+## emails
 
-## email_patterns
+| カラム名      | 型      | 制約                                         | 説明                                    |
+|---------------|---------|----------------------------------------------|-----------------------------------------|
+| id            | TEXT    | PRIMARY KEY                                  | メール ID（UUID）                      |
+| contact_id    | TEXT    | FOREIGN KEY → contacts(id) ON DELETE SET NULL| 紐付く担当者（任意）                    |
+| domain_id     | TEXT    | FOREIGN KEY → domains(id) ON DELETE SET NULL | 紐付くドメイン（任意）                  |
+| email         | TEXT    | NOT NULL, UNIQUE                             | メールアドレス                          |
+| kind          | TEXT    |                                              | 種別（personal / generic / role 等）    |
+| source        | TEXT    |                                              | 生成/取得元（pattern_guess / on_page 等）|
+| is_primary    | INTEGER | NOT NULL DEFAULT 0                           | プライマリ判定フラグ                    |
+| status        | TEXT    | NOT NULL DEFAULT "pending"                   | 検証ステータス                          |
+| confidence    | REAL    |                                              | 信頼度スコア                            |
+| first_seen_at | INTEGER |                                              | 初回検出日時                            |
+| last_seen_at  | INTEGER |                                              | 最終検出日時                            |
+| created_at    | INTEGER | NOT NULL                                     | 作成日時                                |
+| updated_at    | INTEGER | NOT NULL                                     | 更新日時                                |
 
-| カラム名       | 型    | 制約                              | 説明                                    |
-|----------------|-------|-----------------------------------|-----------------------------------------|
-| id             | TEXT  | PRIMARY KEY                       | パターン ID（UUID）                    |
-| company_id     | TEXT  | NOT NULL, FOREIGN KEY → companies | 企業 ID                                 |
-| pattern        | TEXT  | NOT NULL                          | メールアドレスパターン                  |
-| reason         | TEXT  | NOT NULL                          | パターン採用理由                        |
-| domain         | TEXT  |                                   | 対象ドメイン                            |
-| source         | TEXT  |                                   | 由来（llm / email_hippo など）          |
-| sample_email   | TEXT  |                                   | サンプルメールアドレス                  |
-| verified_at    | TEXT  |                                   | 最終検証日時（ISO 文字列）              |
-| success_count  | INTEGER |                                  | 成功回数（null 可）                    |
-| total_count    | INTEGER |                                  | 総試行回数（null 可）                  |
+索引: `idx_emails_email (email, UNIQUE)`, `idx_emails_contact_id (contact_id)`, `idx_emails_status (status)`
 
 ## email_verifications
 
-| カラム名                   | 型     | 制約        | 説明                                           |
-|----------------------------|--------|-------------|------------------------------------------------|
-| id                         | TEXT   | PRIMARY KEY | 検証結果 ID（UUID）                           |
-| email                      | TEXT   | NOT NULL    | 検証対象メールアドレス                        |
-| is_deliverable             | INTEGER| NOT NULL    | 到達可能か（0/1）                              |
-| has_mx_records             | INTEGER| NOT NULL    | MX レコード有無（0/1）                         |
-| reason                     | TEXT   |             | 検証結果の概要                                 |
-| verified_at                | TEXT   | NOT NULL    | 検証日時（ISO 文字列）                         |
-| source                     | TEXT   |             | 検証元（dns_mx / email_hippo 等）             |
-| mailbox_result             | TEXT   |             | メールボックス状態                             |
-| mailbox_reason             | TEXT   |             | メールボックス状態の理由                       |
-| syntax_is_valid            | INTEGER|             | 構文が有効か（0/1, null 可）                   |
-| syntax_reason              | TEXT   |             | 構文判定の理由                                 |
-| domain_has_dns_record      | INTEGER|             | DNS レコード有無（0/1, null 可）               |
-| domain_has_mx_records      | INTEGER|             | MX レコード有無（0/1, null 可）                |
-| inbox_quality_score        | REAL   |             | インボックス品質スコア                         |
-| send_recommendation        | TEXT   |             | 送信推奨度                                     |
-| is_disposable_email_address| INTEGER|             | 使い捨てアドレスか（0/1, null 可）             |
-| is_spam_trap               | INTEGER|             | スパムトラップか（0/1, null 可）               |
-| overall_risk_score         | REAL   |             | 総合リスクスコア                               |
-| hippo_trust_score          | REAL   |             | Hippo Trust スコア                             |
-| hippo_trust_level          | TEXT   |             | Hippo Trust レベル                             |
-| mail_server_location       | TEXT   |             | メールサーバーのロケーション                   |
-| mail_service_type_id       | TEXT   |             | メールサービス種別 ID                          |
-| status                     | TEXT   |             | ステータス                                     |
-| additional_status_info     | TEXT   |             | ステータスに関する追加情報                     |
-| domain_country_code        | TEXT   |             | ドメインの国コード                             |
-| mail_server_country_code   | TEXT   |             | メールサーバーの国コード                       |
-| raw_response_snippet       | TEXT   |             | 元レスポンスの一部                             |
+| カラム名          | 型      | 制約                                      | 説明                          |
+|-------------------|---------|-------------------------------------------|-------------------------------|
+| id                | TEXT    | PRIMARY KEY                               | 検証レコード ID（UUID）      |
+| email_id          | TEXT    | NOT NULL, FOREIGN KEY → emails(id) ON DELETE CASCADE | 紐付くメール |
+| provider          | TEXT    | NOT NULL                                  | 検証プロバイダ（例: emailhippo） |
+| result_status     | TEXT    | NOT NULL                                  | 結果ステータス                 |
+| score             | REAL    |                                           | プロバイダスコア               |
+| regexp_ok         | INTEGER |                                           | 正規表現チェック結果           |
+| gibberish         | INTEGER |                                           | 意味のない文字列か             |
+| disposable        | INTEGER |                                           | 使い捨てか                     |
+| webmail           | INTEGER |                                           | Web メールか                   |
+| mx_records_ok     | INTEGER |                                           | MX レコード有無                |
+| smtp_check        | INTEGER |                                           | SMTP チェック結果              |
+| accept_all        | INTEGER |                                           | Accept-All 判定                |
+| block             | INTEGER |                                           | ブロック判定                   |
+| reason            | TEXT    |                                           | UI 用の簡易理由                |
+| raw_response_json | TEXT    |                                           | 元レスポンス JSON              |
+| created_at        | INTEGER | NOT NULL                                  | 作成日時                       |
 
-## company_scans
+索引: `idx_email_verifications_email_id (email_id)`, `idx_email_verifications_created_at (created_at)`
 
-| カラム名       | 型     | 制約        | 説明                                |
-|----------------|--------|-------------|-------------------------------------|
-| id             | TEXT   | PRIMARY KEY | スキャン ID（UUID）                |
-| company_id     | TEXT   | NOT NULL    | 企業 ID                            |
-| company_name   | TEXT   | NOT NULL    | 企業名                             |
-| company_domain | TEXT   | NOT NULL    | 企業ドメイン                       |
-| department     | TEXT   | NOT NULL    | 対象部署                           |
-| debug          | INTEGER| NOT NULL    | デバッグフラグ（0/1）              |
-| raw_json       | TEXT   | NOT NULL    | 生データ（JSON 文字列）           |
-| created_at     | TEXT   | NOT NULL    | 作成日時（ISO 文字列）             |
+## email_sources
 
-## contact_search_caches
+| カラム名        | 型      | 制約                                      | 説明                                   |
+|-----------------|---------|-------------------------------------------|----------------------------------------|
+| id              | TEXT    | PRIMARY KEY                               | ソース ID（UUID）                     |
+| email_id        | TEXT    | NOT NULL, FOREIGN KEY → emails(id) ON DELETE CASCADE | 紐付くメール |
+| source_type     | TEXT    | NOT NULL                                  | 取得経路（web_page / manual / csv_import 等） |
+| source_domain   | TEXT    |                                           | 取得元ドメイン（例: github.com）       |
+| source_url      | TEXT    |                                           | 取得元 URL                             |
+| first_seen_at   | INTEGER |                                           | 初回検出日時                           |
+| last_seen_at    | INTEGER |                                           | 最終検出日時                           |
+| last_http_status| INTEGER |                                           | 最終アクセス時の HTTP ステータス       |
+| still_on_page   | INTEGER |                                           | 現在もページ上に存在するか             |
+| created_at      | INTEGER | NOT NULL                                  | 作成日時                                |
 
-| カラム名      | 型   | 制約        | 説明                                            |
-|---------------|------|-------------|-------------------------------------------------|
-| id            | TEXT | PRIMARY KEY | キャッシュレコード ID（UUID）                  |
-| domain        | TEXT | NOT NULL    | 対象ドメイン                                   |
-| department    | TEXT | NOT NULL    | 対象部署                                       |
-| company_name  | TEXT |             | 会社名（任意、検索時の会社名メモとして保存）   |
-| contacts_json | TEXT | NOT NULL    | 担当者情報配列の JSON（ContactResponse[]）     |
-| searched_at   | TEXT | NOT NULL    | Web 検索実行日時（ISO 文字列）                 |
+索引: `idx_email_sources_email_id (email_id)`, `idx_email_sources_source_domain (source_domain)`
