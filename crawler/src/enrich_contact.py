@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from typing import Iterable
 
+import pydantic
 from tqdm import tqdm
 
 from src.domains import Contact
@@ -224,7 +225,12 @@ def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
         conn.close()
 
 
-def _parse_args() -> argparse.Namespace:
+class Args(pydantic.BaseModel):
+    db: Path = DEFAULT_DB_PATH
+    recompute_all: bool = False
+
+
+def _parse_args() -> Args:
     parser = argparse.ArgumentParser(
         description="SQLite の contacts テーブルの部署・役職をカテゴリに分類して埋めます。",
     )
@@ -239,7 +245,8 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="既存のカテゴリが入っていても再計算して上書きします（デフォルトは未設定のみ更新）。",
     )
-    return parser.parse_args()
+    parsed_args = parser.parse_args()
+    return Args.model_validate(vars(parsed_args))
 
 
 def main() -> None:

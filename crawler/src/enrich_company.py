@@ -3,6 +3,7 @@ import sqlite3
 from pathlib import Path
 from typing import Iterable
 
+import pydantic
 import httpx
 from tqdm import tqdm
 
@@ -209,7 +210,12 @@ def run(
         conn.close()
 
 
-def _parse_args() -> argparse.Namespace:
+class Args(pydantic.BaseModel):
+    db: Path = DEFAULT_DB_PATH
+    recompute_all: bool = False
+
+
+def _parse_args() -> Args:
     """CLI 引数を解釈する。"""
     parser = argparse.ArgumentParser(
         description=(
@@ -231,7 +237,8 @@ def _parse_args() -> argparse.Namespace:
             "（デフォルトは未設定のみ更新）。"
         ),
     )
-    return parser.parse_args()
+    parsed_args = parser.parse_args()
+    return Args.model_validate(vars(parsed_args))
 
 
 def main() -> None:

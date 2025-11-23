@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
+import pydantic
 from tqdm import tqdm
 
 from src.domains import Domain
@@ -152,7 +153,12 @@ def run(db_path: Path, recompute_all: bool = False) -> Result[int, Exception]:
         conn.close()
 
 
-def _parse_args() -> argparse.Namespace:
+class Args(pydantic.BaseModel):
+    db: Path = DEFAULT_DB_PATH
+    recompute_all: bool = False
+
+
+def _parse_args() -> Args:
     parser = argparse.ArgumentParser(
         description="Update domains.pattern by voting existing emails."
     )
@@ -167,7 +173,8 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="既存の pattern が入っていても再計算して上書きします（デフォルトは未設定のみ更新）。",
     )
-    return parser.parse_args()
+    parsed_args = parser.parse_args()
+    return Args.model_validate(vars(parsed_args))
 
 
 def main() -> None:
