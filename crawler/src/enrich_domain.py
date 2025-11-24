@@ -19,7 +19,7 @@ DEFAULT_BATCH_SIZE = 100
 def load_emails_by_domain(
     conn: sqlite3.Connection,
 ) -> Result[dict[str, list[EmailEntry]], Exception]:
-    """emails と contacts を突き合わせ、verified_ok のみをドメインごとに集計する。"""
+    """emails と contacts を突き合わせ、Ok のみをドメインごとに集計する。"""
     try:
         cursor = conn.execute(
             """
@@ -31,7 +31,7 @@ def load_emails_by_domain(
             FROM emails AS e
             INNER JOIN contacts AS c ON c.id = e.contact_id
             WHERE instr(e.email, '@') > 0
-              AND e.status = 'verified_ok'
+              AND e.status = 'Ok'
             """
         )
     except Exception as exc:  # pragma: no cover - sqlite3 error is enough

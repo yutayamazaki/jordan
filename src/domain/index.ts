@@ -31,13 +31,14 @@ export const EmailCandidateSchema = z.object({
   id: z.uuid(),
   contactId: z.uuid(),
   email: z.string(),
-  isPrimary: z.boolean(),
-  confidence: z.number(),
   type: EmailTypeSchema,
   pattern: EmailPatternSchema.shape.pattern.optional(),
   isDeliverable: z.boolean().optional(),
   hasMxRecords: z.boolean().optional(),
   verificationReason: z.string().optional(),
+  statusInfo: z.string().optional(),
+  domainCountryCode: z.string().optional(),
+  mailServerCountryCode: z.string().optional(),
 });
 
 export type EmailCandidateRecord = z.infer<typeof EmailCandidateSchema>;

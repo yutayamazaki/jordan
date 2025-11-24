@@ -105,7 +105,6 @@ export const emails = sqliteTable("emails", {
     status: text("status")
       .notNull()
       .default("pending"),
-    // "pending", "verified_ok", "verified_ng", "risky", "error", "skipped" 等
     confidence: real("confidence"), // 0〜1 or 0〜100（どちらかに統一）
     firstSeenAt: integer("first_seen_at", { mode: "timestamp" }),
     lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
@@ -116,33 +115,5 @@ export const emails = sqliteTable("emails", {
     emailUnique: uniqueIndex("idx_emails_email").on(table.email),
     contactIdx: index("idx_emails_contact_id").on(table.contactId),
     statusIdx: index("idx_emails_status").on(table.status),
-  }),
-);
-
-export const emailVerifications = sqliteTable( "email_verifications", {
-    id: text("id").primaryKey(),
-    emailId: text("email_id")
-      .notNull()
-      .references(() => emails.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull(), // "emailhippo" 等
-    resultStatus: text("result_status").notNull(), // "deliverable" | "undeliverable" | ...
-    score: real("score"), // provider のスコア
-    regexpOk: integer("regexp_ok", { mode: "boolean" }),
-    gibberish: integer("gibberish", { mode: "boolean" }),
-    disposable: integer("disposable", { mode: "boolean" }),
-    webmail: integer("webmail", { mode: "boolean" }),
-    mxRecordsOk: integer("mx_records_ok", { mode: "boolean" }),
-    smtpCheck: integer("smtp_check", { mode: "boolean" }),
-    acceptAll: integer("accept_all", { mode: "boolean" }),
-    block: integer("block", { mode: "boolean" }),
-    reason: text("reason"), // UI用の簡易理由
-    rawResponseJson: text("raw_response_json"),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => ({
-    emailIdx: index("idx_email_verifications_email_id").on(table.emailId),
-    createdAtIdx: index("idx_email_verifications_created_at").on(
-      table.createdAt,
-    ),
   }),
 );

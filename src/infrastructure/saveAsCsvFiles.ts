@@ -74,13 +74,14 @@ export async function saveAsCsvFiles(
     { id: "id", title: "ID" },
     { id: "contactId", title: "Contact ID" },
     { id: "email", title: "Email" },
-    { id: "isPrimary", title: "Is Primary" },
-    { id: "confidence", title: "Confidence" },
     { id: "type", title: "Type" },
     { id: "pattern", title: "Pattern" },
     { id: "isDeliverable", title: "Is Deliverable" },
     { id: "hasMxRecords", title: "Has MX Records" },
     { id: "verificationReason", title: "Verification Reason" },
+    { id: "statusInfo", title: "Status Info" },
+    { id: "domainCountryCode", title: "Domain Country Code" },
+    { id: "mailServerCountryCode", title: "Mail Server Country Code" },
   ] as const;
   ensureCsvHeader(
     emailCandidatesCsvPath,

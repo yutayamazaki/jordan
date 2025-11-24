@@ -43,13 +43,10 @@ export function generateEmailAddresses({
   const emails: EmailAddress[] = entries.map((entry) => {
     const value = `${entry.local}@${domain}`;
     const type: EmailType = "personal";
-    const isPrimary = entry.pattern === selectedPattern;
-    const confidence = isPrimary ? 0.9 : 0.5;
 
     return {
       value,
       type,
-      confidence,
       pattern: entry.pattern,
       sources: [],
     };

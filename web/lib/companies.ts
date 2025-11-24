@@ -142,7 +142,7 @@ export function listCompanies(
     .leftJoin(contacts, eq(contacts.companyId, companies.id))
     .leftJoin(
       emails,
-      and(eq(emails.contactId, contacts.id), eq(emails.status, "verified_ok")),
+      and(eq(emails.contactId, contacts.id), eq(emails.status, "Ok")),
     )
     .groupBy(
       companies.id,
@@ -237,7 +237,7 @@ export function searchCompanies(
     .from(contacts)
     .innerJoin(
       emails,
-      and(eq(emails.contactId, contacts.id), eq(emails.status, "verified_ok"))
+      and(eq(emails.contactId, contacts.id), eq(emails.status, "Ok"))
     )
     .groupBy(contacts.companyId)
     .as("deliverable_companies");
@@ -385,7 +385,7 @@ export function getCompanyDetail(companyId: string): CompanyDetail | null {
     .leftJoin(domains, eq(emails.domainId, domains.id))
     .where(
       and(
-        eq(emails.status, "verified_ok"),
+        eq(emails.status, "Ok"),
         or(eq(contacts.companyId, companyId), eq(domains.companyId, companyId)),
       ),
     )

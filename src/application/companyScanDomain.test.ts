@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  adjustEmailConfidence,
-  createContactAndEmailCandidates,
-  decideEmailPattern,
-} from "./companyScanDomain";
-import type { IdGenerator, EmailVerificationResult } from "./ports";
+import { createContactAndEmailCandidates, decideEmailPattern } from "./companyScanDomain";
+import type { IdGenerator } from "./ports";
 import type { EmailPattern } from "../domain/entities/emailPattern";
 import type { ContactResponse } from "../domain/entities/contact";
 
@@ -127,7 +123,6 @@ describe("createContactAndEmailCandidates", () => {
     expect(entry.contact.lastName).toBe("yamada");
 
     expect(entry.primaryEmail.value).toBe("taro.yamada@example.com");
-    expect(entry.primaryEmail.confidence).toBeGreaterThan(0);
 
     // alternatives should not be empty and should not include the primary email itself
     expect(entry.alternativeEmails.length).toBeGreaterThan(0);
@@ -135,65 +130,3 @@ describe("createContactAndEmailCandidates", () => {
     expect(alternativeValues).not.toContain(entry.primaryEmail.value);
   });
 });
-
-describe("adjustEmailConfidence", () => {
-  it("returns base confidence when verification is missing", () => {
-    const base = 0.5;
-    const adjusted = adjustEmailConfidence(base);
-    expect(adjusted).toBe(base);
-  });
-
-  it("returns 1 when EmailHippo marks address as deliverable", () => {
-    const base = 0.6;
-    const verification: EmailVerificationResult = {
-      email: "user@example.com",
-      isDeliverable: true,
-      hasMxRecords: true,
-      source: "email_hippo",
-    };
-
-    const adjusted = adjustEmailConfidence(base, verification);
-    expect(adjusted).toBe(1);
-  });
-
-  it("caps confidence at 0.1 when EmailHippo marks address as undeliverable", () => {
-    const base = 0.9;
-    const verification: EmailVerificationResult = {
-      email: "user@example.com",
-      isDeliverable: false,
-      hasMxRecords: true,
-      source: "email_hippo",
-    };
-
-    const adjusted = adjustEmailConfidence(base, verification);
-    expect(adjusted).toBeLessThanOrEqual(0.1);
-    expect(adjusted).toBeGreaterThan(0);
-  });
-
-  it("increases confidence when MX records exist for non EmailHippo sources", () => {
-    const base = 0.7;
-    const verification: EmailVerificationResult = {
-      email: "user@example.com",
-      isDeliverable: true,
-      hasMxRecords: true,
-      source: "dns_mx",
-    };
-
-    const adjusted = adjustEmailConfidence(base, verification);
-    expect(adjusted).toBeCloseTo(0.8, 5);
-  });
-
-  it("decreases confidence when MX records do not exist", () => {
-    const base = 0.5;
-    const verification: EmailVerificationResult = {
-      email: "user@example.com",
-      isDeliverable: false,
-      hasMxRecords: false,
-      source: "dns_mx",
-    };
-
-    const adjusted = adjustEmailConfidence(base, verification);
-    expect(adjusted).toBeCloseTo(0.2, 5);
-  });
-}
-);

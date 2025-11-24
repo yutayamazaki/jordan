@@ -85,7 +85,7 @@ class DomainEnricher(Enricher[Domain]):
 
         counts: Counter[str] = Counter()
         for email in emails:
-            if email.status and email.status.lower() == "verified_ng":
+            if email.status and email.status.lower() == "bad":
                 continue
 
             pattern = infer_pattern(email.local, email.first_name, email.last_name)

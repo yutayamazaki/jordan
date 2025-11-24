@@ -101,7 +101,7 @@ function buildDeliverableEmailsSubquery(db: DbClient) {
       )
     })
     .from(emails)
-    .where(eq(emails.status, "verified_ok"))
+    .where(eq(emails.status, "Ok"))
     .groupBy(emails.contactId)
     .as("deliverable_emails");
 }
@@ -353,7 +353,7 @@ export function getContactDetail(contactId: string): ContactDetail | null {
       confidence: emails.confidence ?? sql<number>`0`,
       type: emails.kind ?? sql<string>`''`,
       pattern: sql<string | null>`null`,
-      isDeliverable: sql<boolean | null>`case when ${emails.status} = 'verified_ok' then 1 when ${emails.status} = 'verified_ng' then 0 else null end`,
+      isDeliverable: sql<boolean | null>`case when ${emails.status} = 'Ok' then 1 when ${emails.status} = 'Bad' then 0 else null end`,
       hasMxRecords: sql<boolean | null>`null`,
       verificationReason: emails.status
     })
@@ -361,7 +361,7 @@ export function getContactDetail(contactId: string): ContactDetail | null {
     .where(
       and(
         eq(emails.contactId, contactIdNumber),
-        eq(emails.status, "verified_ok")
+        eq(emails.status, "Ok")
       )
     )
     .orderBy(desc(emails.isPrimary), desc(emails.confidence))

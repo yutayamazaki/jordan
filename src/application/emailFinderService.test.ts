@@ -31,7 +31,7 @@ describe("generateEmailAddresses", () => {
     expect(byPattern.get("flast")).toBe("tyamada@example.com");
   });
 
-  it("uses specified primaryPattern as primary and sets confidence accordingly", () => {
+  it("uses specified primaryPattern as primary", () => {
     const primaryPattern = "first.last" as const;
     const result = generateEmailAddresses({
       ...baseInput,
@@ -40,13 +40,11 @@ describe("generateEmailAddresses", () => {
 
     expect(result.primary.pattern).toBe(primaryPattern);
     expect(result.primary.value).toBe("taro.yamada@example.com");
-    expect(result.primary.confidence).toBe(0.9);
 
     result.alternatives.forEach((alt) => {
       if (alt.pattern === primaryPattern) {
         throw new Error("primary pattern must not appear in alternatives");
       }
-      expect(alt.confidence).toBe(0.5);
     });
   });
 
@@ -56,7 +54,5 @@ describe("generateEmailAddresses", () => {
     // DEFAULT_EMAIL_PATTERN は "f-last"
     expect(result.primary.pattern).toBe("f-last");
     expect(result.primary.value).toBe("t-yamada@example.com");
-    expect(result.primary.confidence).toBe(0.9);
   });
 });
-

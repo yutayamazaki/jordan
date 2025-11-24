@@ -69,13 +69,14 @@ export class SqliteLeadExporter implements LeadExporter {
         id,
         contact_id,
         email,
-        is_primary,
-        confidence,
         type,
         pattern,
         is_deliverable,
         has_mx_records,
         verification_reason,
+        status_info,
+        domain_country_code,
+        mail_server_country_code,
         created_at,
         updated_at
       )
@@ -83,26 +84,28 @@ export class SqliteLeadExporter implements LeadExporter {
         @id,
         @contact_id,
         @email,
-        @is_primary,
-        @confidence,
         @type,
         @pattern,
         @is_deliverable,
         @has_mx_records,
         @verification_reason,
+        @status_info,
+        @domain_country_code,
+        @mail_server_country_code,
         @created_at,
         @updated_at
       )
       ON CONFLICT(id) DO UPDATE SET
         contact_id = excluded.contact_id,
         email = excluded.email,
-        is_primary = excluded.is_primary,
-        confidence = excluded.confidence,
         type = excluded.type,
         pattern = excluded.pattern,
         is_deliverable = excluded.is_deliverable,
         has_mx_records = excluded.has_mx_records,
         verification_reason = excluded.verification_reason,
+        status_info = excluded.status_info,
+        domain_country_code = excluded.domain_country_code,
+        mail_server_country_code = excluded.mail_server_country_code,
         updated_at = excluded.updated_at
     `);
 
@@ -179,8 +182,6 @@ export class SqliteLeadExporter implements LeadExporter {
           id: candidate.id,
           contact_id: candidate.contactId,
           email: candidate.email,
-          is_primary: candidate.isPrimary ? 1 : 0,
-          confidence: candidate.confidence,
           type: candidate.type,
           pattern: candidate.pattern ?? null,
           is_deliverable:
@@ -196,6 +197,9 @@ export class SqliteLeadExporter implements LeadExporter {
                 : 0
               : null,
           verification_reason: candidate.verificationReason ?? null,
+          status_info: candidate.statusInfo ?? null,
+          domain_country_code: candidate.domainCountryCode ?? null,
+          mail_server_country_code: candidate.mailServerCountryCode ?? null,
           created_at: nowIso,
           updated_at: nowIso,
         });

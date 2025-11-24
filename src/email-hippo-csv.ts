@@ -78,15 +78,13 @@ async function main() {
       JOIN email_candidates ec ON ec.contact_id = c.id
       WHERE
         c.company_id = @companyId
-        AND ec.is_primary = 1
         AND ec.is_deliverable = 1
-        AND ec.confidence >= 0.8
+        AND (ec.has_mx_records = 1 OR ec.has_mx_records IS NULL)
       LIMIT 1
       `,
   );
 
-  // 「適切なメールアドレス（deliverable かつ一定以上の confidence を持つ primary）が
-  //  見つかっていない会社」のみを score 対象とする
+  // 「適切なメールアドレス（deliverable かつ MX があるもの）が見つかっていない会社」のみを score 対象とする
   const targets = latestScans.filter((scan) => {
     const row = hasGoodPrimaryEmailStmt.get({
       companyId: scan.company_id,

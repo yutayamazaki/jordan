@@ -16,6 +16,10 @@
   `name,domain` などの CSV から `companies` / `domains` に追加入力します。ドメイン重複時の挙動は `--on-duplicate=skip|update` で切り替えられ、`--infer-website` を付けると `website_url` が空でも `https://{domain}` を補完します。
 - `src/search_contacts.py`  
   OpenAI Responses API の Structured Outputs を使って、各企業の Web 検索結果から担当者候補を JSON 化して `contacts` テーブルに追加します。`OPENAI_API_KEY` を `.env` などで設定しておく必要があり、`--department` で部門を絞り込み、`--skip-if-contacts-exist` で既存連絡先がある企業をスキップできます。
+- `src/export_contact_email_candidates.py`  
+  `contacts` と `domains` を突き合わせ、氏名と推定パターンから想定メールアドレスを生成して CSV に出力します。`--skip-if-email-exists` で `emails` 行を持つコンタクトを除外でき、`--max-candidates` で 1 人あたりの候補数を調整できます。
+- `src/import_email_hippo_csv.py`  
+  EmailHippo GUI からダウンロードした検証 CSV/TSV を読み込み、`emails` テーブルに行を追加します。`status_info` / `domain_country_code` / `mail_server_country_code` を CSV から転記します。
 
 ### Company enrichment の中身
 
@@ -71,6 +75,14 @@ export OPENAI_API_KEY=sk-...
 uv run python -m src.search_contacts --db ../data/jordan.sqlite
 # 既存コンタクトがある会社をスキップし、特定の部署だけ対象にする
 uv run python -m src.search_contacts --db ../data/jordan.sqlite --department "営業" --skip-if-contacts-exist
+
+# 例: Contact ごとの想定メールアドレス候補を CSV 出力
+uv run python -m src.export_contact_email_candidates --db ../data/jordan.sqlite --output ../dist/contact_email_candidates.csv
+# emails が既に紐づく Contact を除外し、候補数を 3 件に絞る
+uv run python -m src.export_contact_email_candidates --db ../data/jordan.sqlite --max-candidates 3 --skip-if-email-exists
+
+# 例: EmailHippo GUI CSV を emails に投入
+uv run python -m src.import_email_hippo_csv --csv ../inputs/email_hippo.csv --db ../data/jordan.sqlite
 ```
 
 ## Tests

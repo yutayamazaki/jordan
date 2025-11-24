@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -77,31 +77,13 @@ class Email(JordanBaseModel):
     contact_id: Optional[str] = None
     domain_id: Optional[str] = None
     email: str
-    kind: Optional[str] = None
+    kind: Optional[Literal["personal", "generic", "role", "unknown"]] = None
     source: Optional[str] = None
-    is_primary: bool = False
-    status: str = "pending"
-    confidence: Optional[float] = None
+    status: Literal["pending", "Unverifiable", "Bad", "Ok"] = "pending"
+    domain_country_code: Optional[Literal["US", "JP"]] = None
+    mail_server_country_code: Optional[Literal["US", "JP"]] = None
+    status_info: Optional[str] = None
     first_seen_at: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-
-
-class EmailVerification(JordanBaseModel):
-    id: str
-    email_id: str
-    provider: str
-    result_status: str
-    score: Optional[float] = None
-    regexp_ok: Optional[bool] = None
-    gibberish: Optional[bool] = None
-    disposable: Optional[bool] = None
-    webmail: Optional[bool] = None
-    mx_records_ok: Optional[bool] = None
-    smtp_check: Optional[bool] = None
-    accept_all: Optional[bool] = None
-    block: Optional[bool] = None
-    reason: Optional[str] = None
-    raw_response_json: Optional[str] = None
-    created_at: datetime

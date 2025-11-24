@@ -27,12 +27,10 @@ const ContactAndEmailCandidatesSchema = z.object({
   }),
   primaryEmail: z.object({
     value: z.string(),
-    confidence: z.number(),
   }),
   alternativeEmails: z.array(
     z.object({
       value: z.string(),
-      confidence: z.number(),
     }),
   ),
 });
@@ -136,38 +134,12 @@ export function createContactAndEmailCandidates(
       contact,
       primaryEmail: {
         value: emailCandidate.primary.value,
-        confidence: emailCandidate.primary.confidence,
       },
       alternativeEmails: emailCandidate.alternatives.map((alt) => ({
         value: alt.value,
-        confidence: alt.confidence,
       })),
     };
   });
-}
-
-export function adjustEmailConfidence(
-  baseConfidence: number,
-  verification?: EmailVerificationResult,
-): number {
-  if (!verification) return baseConfidence;
-
-  if (verification.source === "email_hippo") {
-    if (verification.isDeliverable === true) {
-      return 1;
-    }
-    if (verification.isDeliverable === false) {
-      return Math.min(baseConfidence, 0.1);
-    }
-  }
-
-  let adjusted = baseConfidence;
-  if (verification.hasMxRecords) {
-    adjusted = Math.min(1, adjusted + 0.1);
-  } else {
-    adjusted = Math.max(0, adjusted - 0.3);
-  }
-  return adjusted;
 }
 
 export type CompanyDomainEntities = {
@@ -217,16 +189,16 @@ export function buildCompanyDomainEntities(
           id: crypto.randomUUID(),
           contactId: contactRecord.id,
           email: candidate.primaryEmail.value,
-          isPrimary: true,
-          confidence: adjustEmailConfidence(
-            candidate.primaryEmail.confidence,
-            emailVerificationMap.get(candidate.primaryEmail.value),
-          ),
           type: "personal",
           pattern: emailPattern,
           isDeliverable: emailVerificationMap.get(candidate.primaryEmail.value)?.isDeliverable,
           hasMxRecords: emailVerificationMap.get(candidate.primaryEmail.value)?.hasMxRecords,
           verificationReason: emailVerificationMap.get(candidate.primaryEmail.value)?.reason,
+          statusInfo: emailVerificationMap.get(candidate.primaryEmail.value)?.additionalStatusInfo,
+          domainCountryCode:
+            emailVerificationMap.get(candidate.primaryEmail.value)?.domainCountryCode,
+          mailServerCountryCode:
+            emailVerificationMap.get(candidate.primaryEmail.value)?.mailServerCountryCode,
         }),
       );
 
@@ -236,16 +208,15 @@ export function buildCompanyDomainEntities(
             id: crypto.randomUUID(),
             contactId: contactRecord.id,
             email: alt.value,
-            isPrimary: false,
-            confidence: adjustEmailConfidence(
-              alt.confidence,
-              emailVerificationMap.get(alt.value),
-            ),
             type: "personal",
             pattern: emailPattern,
             isDeliverable: emailVerificationMap.get(alt.value)?.isDeliverable,
             hasMxRecords: emailVerificationMap.get(alt.value)?.hasMxRecords,
             verificationReason: emailVerificationMap.get(alt.value)?.reason,
+            statusInfo: emailVerificationMap.get(alt.value)?.additionalStatusInfo,
+            domainCountryCode: emailVerificationMap.get(alt.value)?.domainCountryCode,
+            mailServerCountryCode:
+              emailVerificationMap.get(alt.value)?.mailServerCountryCode,
           }),
         );
       });

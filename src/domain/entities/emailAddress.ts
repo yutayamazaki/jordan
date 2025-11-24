@@ -21,7 +21,6 @@ export type EmailSource = z.infer<typeof EmailSourceSchema>;
 export const EmailAddressSchema = z.object({
   value: z.string(),
   type: EmailTypeSchema,
-  confidence: z.number().min(0).max(1),
   pattern: z.string().optional(),
   sources: z.array(EmailSourceSchema).default([]),
 });
