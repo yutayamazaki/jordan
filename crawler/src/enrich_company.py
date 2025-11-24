@@ -255,7 +255,9 @@ async def run_async(
                 semaphore = asyncio.Semaphore(max(1, concurrency))
                 progress = tqdm(total=total, desc="enriching companies")
 
-                async def _process_company(company: Company) -> Result[UpdatePayload | None, Exception]:
+                async def _process_company(
+                    company: Company,
+                ) -> Result[UpdatePayload | None, Exception]:
                     async with semaphore:
                         try:
                             enriched_result = await enricher.enrich(company)

@@ -163,6 +163,8 @@ cd web
 npm install
 ```
 
+`.env` をプロジェクトルートに置き、最低限 `OPENAI_API_KEY` を設定してください（テンプレート: `.env.example`）。
+
 ### 環境変数
 
 `.env` などで以下を設定します。

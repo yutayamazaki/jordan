@@ -9,7 +9,6 @@ from typing import Iterable, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
-import tqdm
 from pydantic import BaseModel, Field, TypeAdapter
 
 from src.result import Result

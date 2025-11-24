@@ -10,8 +10,12 @@
   `companies.website_url` をもとに favicon（ロゴ代替）を探索し `logo_url` を埋め、`meta description` を抽出して `description` に保存し、Web テキストから簡易ルールで業種ラベルを判定して `industry` を補完します。
 - `src/enrich_domain.py`  
   既存メール（`emails` と `contacts` を join）からローカル部のパターンを多数決で推定し、`domains.pattern` を更新します。`first.last` や `flast` などの組み合わせを候補として比較します。
+- `src/infer_contact_names.py`  
+  `contacts` の `first_name` / `last_name` が空の行をピックアップし、LLM に氏名のローマ字表記を推定させて更新します。会社名・部署・役職も併せて渡して推論精度を補助します。
 - `src/import_companies.py`  
   `name,domain` などの CSV から `companies` / `domains` に追加入力します。ドメイン重複時の挙動は `--on-duplicate=skip|update` で切り替えられ、`--infer-website` を付けると `website_url` が空でも `https://{domain}` を補完します。
+- `src/search_contacts.py`  
+  OpenAI Responses API の Structured Outputs を使って、各企業の Web 検索結果から担当者候補を JSON 化して `contacts` テーブルに追加します。`OPENAI_API_KEY` を `.env` などで設定しておく必要があり、`--department` で部門を絞り込み、`--skip-if-contacts-exist` で既存連絡先がある企業をスキップできます。
 
 ### Company enrichment の中身
 
@@ -54,10 +58,19 @@ uv run python -m src.enrich_domain --db ../data/jordan.sqlite
 # 既存 pattern も含めて再計算
 uv run python -m src.enrich_domain --db ../data/jordan.sqlite --recompute-all
 
+# 例: first_name / last_name を LLM で補完
+uv run python -m src.infer_contact_names --db ../data/jordan.sqlite
+
 # 例: CSV から企業/ドメインを追加
 uv run python -m src.import_companies --csv ../inputs/companies.csv --db ../data/jordan.sqlite
 # ドメイン重複時に上書き
 uv run python -m src.import_companies --csv ../inputs/companies.csv --db ../data/jordan.sqlite --on-duplicate update
+
+# 例: OpenAI で担当者を検索
+export OPENAI_API_KEY=sk-...
+uv run python -m src.search_contacts --db ../data/jordan.sqlite
+# 既存コンタクトがある会社をスキップし、特定の部署だけ対象にする
+uv run python -m src.search_contacts --db ../data/jordan.sqlite --department "営業" --skip-if-contacts-exist
 ```
 
 ## Tests
