@@ -2,6 +2,35 @@
 
 `crawler/` は `data/jordan.sqlite` に入った既存データを補完するための小さな ETL 群です。Pydantic モデル（`src/domains.py`）で型を整えつつ、`src/result.py` の `Result` 型で失敗を明示的に扱う構成になっています。
 
+## セットアップと基本の使い方
+
+- Python 3.12 + [uv](https://github.com/astral-sh/uv) を利用します。まだなら `pip install uv` か `brew install uv` で導入してください。
+- 依存関係のインストール: `cd crawler && uv sync`（開発ツール込みなら `uv sync --extra dev`）。
+- SQLite はデフォルトで `../data/jordan.sqlite` を参照します。別の DB を使うときは各コマンドの `--db` を差し替えてください。
+- LLM を使うスクリプト（`src/search_contacts.py` / `src/infer_contact_names.py`）は `OPENAI_API_KEY` を環境変数で渡してください。
+- すべてモジュール実行スタイルで動かします: `uv run python -m src.<script> --help` でオプションを確認できます。
+
+### クイックスタート例
+
+```bash
+cd crawler
+uv sync
+
+# 1) 企業・ドメインの投入
+uv run python -m src.import_companies --csv ../inputs/companies.csv --db ../data/jordan.sqlite --on-duplicate update
+# 2) 企業サイトからロゴ・業種などを補完
+uv run python -m src.enrich_company --db ../data/jordan.sqlite --recompute-all
+# 3) Web 検索 + LLM で担当者候補を追加
+export OPENAI_API_KEY=sk-...
+uv run python -m src.search_contacts --db ../data/jordan.sqlite --department "マーケ" --skip-if-contacts-exist
+# 4) 部署/役職カテゴリを正規化
+uv run python -m src.enrich_contact --db ../data/jordan.sqlite
+# 5) 既存メールからドメインのローカル部パターンを推定
+uv run python -m src.enrich_domain --db ../data/jordan.sqlite
+# 6) 想定メールアドレス候補を CSV で出力
+uv run python -m src.export_contact_email_candidates --db ../data/jordan.sqlite --output ../dist/contact_email_candidates.csv
+```
+
 ## 主なスクリプト
 
 - `src/enrich_contact.py`  
