@@ -11,7 +11,6 @@
 | website_url        | TEXT    |                 | 代表サイト URL                       |
 | description        | TEXT    |                 | 企業説明                             |
 | industry           | TEXT    |                 | 業種                                 |
-| country            | TEXT    |                 | 国                                   |
 | city               | TEXT    |                 | 市区町村                             |
 | employee_range     | TEXT    |                 | 従業員規模（例: "1-10", "11-50"）    |
 | primary_domain_id  | INTEGER |                 | プライマリドメインの ID（任意）      |
@@ -51,7 +50,6 @@
 | department    | TEXT    |                                      | 部署                                    |
 | department_category | TEXT |                                    | 部署カテゴリ（正規化）                   |
 | seniority     | TEXT    |                                      | シニアリティ（例: C-level, Manager）    |
-| country       | TEXT    |                                      | 国                                      |
 | city          | TEXT    |                                      | 市区町村                                |
 | linkedin_url  | TEXT    |                                      | LinkedIn URL                            |
 | twitter_url   | TEXT    |                                      | Twitter/X URL                           |
@@ -107,20 +105,3 @@
 | created_at        | INTEGER | NOT NULL                                  | 作成日時                       |
 
 索引: `idx_email_verifications_email_id (email_id)`, `idx_email_verifications_created_at (created_at)`
-
-## email_sources
-
-| カラム名        | 型      | 制約                                      | 説明                                   |
-|-----------------|---------|-------------------------------------------|----------------------------------------|
-| id              | TEXT    | PRIMARY KEY                               | ソース ID（UUID）                     |
-| email_id        | TEXT    | NOT NULL, FOREIGN KEY → emails(id) ON DELETE CASCADE | 紐付くメール |
-| source_type     | TEXT    | NOT NULL                                  | 取得経路（web_page / manual / csv_import 等） |
-| source_domain   | TEXT    |                                           | 取得元ドメイン（例: github.com）       |
-| source_url      | TEXT    |                                           | 取得元 URL                             |
-| first_seen_at   | INTEGER |                                           | 初回検出日時                           |
-| last_seen_at    | INTEGER |                                           | 最終検出日時                           |
-| last_http_status| INTEGER |                                           | 最終アクセス時の HTTP ステータス       |
-| still_on_page   | INTEGER |                                           | 現在もページ上に存在するか             |
-| created_at      | INTEGER | NOT NULL                                  | 作成日時                                |
-
-索引: `idx_email_sources_email_id (email_id)`, `idx_email_sources_source_domain (source_domain)`

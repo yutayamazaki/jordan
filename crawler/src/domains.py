@@ -28,7 +28,6 @@ class Company(JordanBaseModel):
     logo_url: Optional[str] = None
     description: Optional[str] = None
     industry: Optional[str] = None
-    country: Optional[str] = None
     city: Optional[str] = None
     employee_range: Optional[str] = None
     primary_domain_id: Optional[int] = None
@@ -61,7 +60,6 @@ class Contact(JordanBaseModel):
     position_category: Optional[str] = None
     department_category: Optional[str] = None
     seniority: Optional[str] = None
-    country: Optional[str] = None
     city: Optional[str] = None
     linkedin_url: Optional[str] = None
     twitter_url: Optional[str] = None
@@ -106,17 +104,4 @@ class EmailVerification(JordanBaseModel):
     block: Optional[bool] = None
     reason: Optional[str] = None
     raw_response_json: Optional[str] = None
-    created_at: datetime
-
-
-class EmailSource(JordanBaseModel):
-    id: str
-    email_id: str
-    source_type: str
-    source_domain: Optional[str] = None
-    source_url: Optional[str] = None
-    first_seen_at: Optional[datetime] = None
-    last_seen_at: Optional[datetime] = None
-    last_http_status: Optional[int] = None
-    still_on_page: Optional[bool] = None
     created_at: datetime

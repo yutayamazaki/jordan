@@ -15,7 +15,6 @@ export const companies = sqliteTable("companies", {
     logoUrl: text("logo_url"), // 会社サイトのロゴ画像URL
     description: text("description"),
     industry: text("industry"),
-    country: text("country"),
     city: text("city"),
     employeeRange: text("employee_range"), // "1-10", "11-50" etc.
     primaryDomainId: integer("primary_domain_id"),
@@ -67,7 +66,6 @@ export const contacts = sqliteTable("contacts", {
     department: text("department"), // 部署
     departmentCategory: text("department_category"), // 部署カテゴリ（正規化済み）
     seniority: text("seniority"), // "C-level", "Manager" 等
-    country: text("country"),
     city: text("city"),
     linkedinUrl: text("linkedin_url"),
     twitterUrl: text("twitter_url"),
@@ -145,28 +143,6 @@ export const emailVerifications = sqliteTable( "email_verifications", {
     emailIdx: index("idx_email_verifications_email_id").on(table.emailId),
     createdAtIdx: index("idx_email_verifications_created_at").on(
       table.createdAt,
-    ),
-  }),
-);
-
-export const emailSources = sqliteTable("email_sources", {
-    id: text("id").primaryKey(),
-    emailId: text("email_id")
-      .notNull()
-      .references(() => emails.id, { onDelete: "cascade" }),
-    sourceType: text("source_type").notNull(), // "web_page" | "manual" | "csv_import" 等
-    sourceDomain: text("source_domain"), // github.com, example.com 等
-    sourceUrl: text("source_url"), // 実際のURL
-    firstSeenAt: integer("first_seen_at", { mode: "timestamp" }),
-    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
-    lastHttpStatus: integer("last_http_status"),
-    stillOnPage: integer("still_on_page", { mode: "boolean" }),
-    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-  },
-  (table) => ({
-    emailIdx: index("idx_email_sources_email_id").on(table.emailId),
-    sourceDomainIdx: index("idx_email_sources_source_domain").on(
-      table.sourceDomain,
     ),
   }),
 );

@@ -74,7 +74,6 @@ def iter_companies(
             logo_url,
             description,
             industry,
-            country,
             city,
             employee_range,
             primary_domain_id,

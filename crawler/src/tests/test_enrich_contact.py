@@ -25,7 +25,6 @@ def _make_db(db_path: Path) -> sqlite3.Connection:
             department_category TEXT,
             position_category TEXT,
             seniority TEXT,
-            country TEXT,
             city TEXT,
             linkedin_url TEXT,
             twitter_url TEXT,

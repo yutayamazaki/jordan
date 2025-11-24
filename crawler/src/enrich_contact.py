@@ -108,7 +108,6 @@ def iter_contacts(conn: sqlite3.Connection, only_missing: bool = True) -> Iterab
             department_category,
             position_category,
             seniority,
-            country,
             city,
             linkedin_url,
             twitter_url,

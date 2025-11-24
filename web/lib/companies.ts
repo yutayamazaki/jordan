@@ -54,7 +54,6 @@ export type CompanyDetail = {
   websiteUrl: string | null;
   logoUrl: string | null;
   industry: string | null;
-  country: string | null;
   city: string | null;
   employeeRange: string | null;
   createdAt: number | null;
@@ -331,16 +330,15 @@ export function getCompanyDetail(companyId: string): CompanyDetail | null {
     .select({
       id: companies.id,
       name: companies.name,
-      description: companies.description,
-      websiteUrl: companies.websiteUrl,
-      logoUrl: companies.logoUrl,
-      industry: companies.industry,
-      country: companies.country,
-      city: companies.city,
-      employeeRange: companies.employeeRange,
-      createdAt: companies.createdAt,
-      updatedAt: companies.updatedAt,
-    })
+    description: companies.description,
+    websiteUrl: companies.websiteUrl,
+    logoUrl: companies.logoUrl,
+    industry: companies.industry,
+    city: companies.city,
+    employeeRange: companies.employeeRange,
+    createdAt: companies.createdAt,
+    updatedAt: companies.updatedAt,
+  })
     .from(companies)
     .where(eq(companies.id, companyId))
     .get();

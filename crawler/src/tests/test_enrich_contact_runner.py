@@ -24,7 +24,6 @@ def _prepare_db(tmp_path: Path) -> Path:
             department_category TEXT,
             position_category TEXT,
             seniority TEXT,
-            country TEXT,
             city TEXT,
             linkedin_url TEXT,
             twitter_url TEXT,
@@ -43,7 +42,7 @@ def _prepare_db(tmp_path: Path) -> Path:
         """
         INSERT INTO contacts (
             id, company_id, full_name, first_name, last_name, position, department,
-            department_category, position_category, seniority, country, city, linkedin_url,
+            department_category, position_category, seniority, city, linkedin_url,
             twitter_url, phone_number, source_label, source_url, first_seen_at, last_seen_at,
             created_at, updated_at
         )
@@ -58,7 +57,6 @@ def _prepare_db(tmp_path: Path) -> Path:
                 "山田",
                 "課長",
                 "情報システム部",
-                None,
                 None,
                 None,
                 None,
@@ -90,7 +88,6 @@ def _prepare_db(tmp_path: Path) -> Path:
                 None,
                 None,
                 None,
-                None,
                 now,
                 now,
                 now,
@@ -103,7 +100,6 @@ def _prepare_db(tmp_path: Path) -> Path:
                 "花子",
                 "田中",
                 "室長",
-                None,
                 None,
                 None,
                 None,

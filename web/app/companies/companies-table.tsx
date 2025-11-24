@@ -19,7 +19,6 @@ type CompanyDetail = {
   websiteUrl: string | null;
   logoUrl: string | null;
   industry: string | null;
-  country: string | null;
   city: string | null;
   employeeRange: string | null;
   domains: {
